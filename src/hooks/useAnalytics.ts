@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -7,6 +7,8 @@ const SESSION_KEY = 'analytics_session_id';
 export const useAnalytics = () => {
   const { isAdmin, user } = useAuth();
   const sessionId = useRef<string | null>(null);
+  const [currentIP, setCurrentIP] = useState<string | null>(null);
+  const [ignoredIPs, setIgnoredIPs] = useState<string[]>([]);
 
   useEffect(() => {
     // Initialize or get existing session
@@ -18,6 +20,39 @@ export const useAnalytics = () => {
     }
     
     sessionId.current = existingSession;
+
+    // Fetch client IP
+    const fetchClientIP = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('get-client-ip');
+        if (!error && data?.ip) {
+          setCurrentIP(data.ip);
+        }
+      } catch (error) {
+        console.error('Failed to fetch client IP:', error);
+      }
+    };
+
+    // Fetch ignored IPs list
+    const fetchIgnoredIPs = async () => {
+      try {
+        const { data } = await supabase
+          .from('app_settings')
+          .select('setting_value')
+          .eq('setting_key', 'ignored_ips')
+          .single();
+        
+        if (data?.setting_value) {
+          const ips = JSON.parse(data.setting_value);
+          setIgnoredIPs(ips);
+        }
+      } catch (error) {
+        console.error('Failed to fetch ignored IPs:', error);
+      }
+    };
+
+    fetchClientIP();
+    fetchIgnoredIPs();
 
     // Create or update session record
     if (!isAdmin) {
@@ -34,7 +69,10 @@ export const useAnalytics = () => {
   }, [isAdmin, user]);
 
   const shouldTrack = () => {
-    return !isAdmin && sessionId.current;
+    if (isAdmin) return false;
+    if (!sessionId.current) return false;
+    if (currentIP && ignoredIPs.includes(currentIP)) return false;
+    return true;
   };
 
   const trackPageView = async (path: string) => {

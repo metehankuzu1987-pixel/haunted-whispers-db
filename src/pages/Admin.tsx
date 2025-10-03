@@ -45,6 +45,9 @@ export default function Admin() {
   const [securityLogs, setSecurityLogs] = useState<any[]>([]);
   const [criticalCount, setCriticalCount] = useState(0);
   const [showCriticalBanner, setShowCriticalBanner] = useState(false);
+  const [currentIP, setCurrentIP] = useState<string>('');
+  const [ignoredIPs, setIgnoredIPs] = useState<string[]>([]);
+  const [newIP, setNewIP] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -66,6 +69,8 @@ export default function Admin() {
       fetchUserCount();
       fetchRecentPlaces();
       fetchSecurityLogs();
+      fetchCurrentIP();
+      fetchIgnoredIPs();
     }
   }, [isAdmin]);
 
@@ -91,6 +96,31 @@ export default function Admin() {
           setShowCriticalBanner(true);
         } else if (newLog.level === 'warn') {
           toast.warning(`⚠️ Güvenlik: ${newLog.message}`);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin]);
+
+  // Real-time IP settings monitoring
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const channel = supabase
+      .channel('app-settings-realtime')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'app_settings',
+        filter: 'setting_key=eq.ignored_ips'
+      }, (payload) => {
+        const newValue = payload.new.setting_value;
+        if (newValue) {
+          const ips = JSON.parse(newValue);
+          setIgnoredIPs(ips);
         }
       })
       .subscribe();
@@ -195,6 +225,107 @@ export default function Admin() {
   const openBackend = (path: string = '') => {
     const baseUrl = `https://lovable.dev/projects/${import.meta.env.VITE_SUPABASE_PROJECT_ID}/backend`;
     window.open(`${baseUrl}${path}`, '_blank');
+  };
+
+  const fetchCurrentIP = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-client-ip');
+      if (!error && data?.ip) {
+        setCurrentIP(data.ip);
+      }
+    } catch (error) {
+      console.error('Failed to fetch current IP:', error);
+    }
+  };
+
+  const fetchIgnoredIPs = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_key', 'ignored_ips')
+        .single();
+      
+      if (data?.setting_value) {
+        const ips = JSON.parse(data.setting_value);
+        setIgnoredIPs(ips);
+      }
+    } catch (error) {
+      console.error('Failed to fetch ignored IPs:', error);
+    }
+  };
+
+  const validateIP = (ip: string): boolean => {
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(ip)) return false;
+    
+    const parts = ip.split('.');
+    return parts.every(part => {
+      const num = parseInt(part);
+      return num >= 0 && num <= 255;
+    });
+  };
+
+  const addIgnoredIP = async (ip: string) => {
+    if (!validateIP(ip)) {
+      toast.error('Geçersiz IP formatı! Örnek: 192.168.1.1');
+      return;
+    }
+
+    if (ignoredIPs.includes(ip)) {
+      toast.error('Bu IP zaten listede!');
+      return;
+    }
+
+    if (ignoredIPs.length >= 50) {
+      toast.error('Maksimum 50 IP ekleyebilirsiniz!');
+      return;
+    }
+
+    const newList = [...ignoredIPs, ip];
+    
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ 
+        setting_value: JSON.stringify(newList),
+        updated_at: new Date().toISOString()
+      })
+      .eq('setting_key', 'ignored_ips');
+
+    if (error) {
+      toast.error('IP eklenemedi: ' + error.message);
+    } else {
+      setIgnoredIPs(newList);
+      setNewIP('');
+      toast.success(`IP eklendi: ${ip}`);
+    }
+  };
+
+  const removeIgnoredIP = async (ip: string) => {
+    const newList = ignoredIPs.filter(i => i !== ip);
+    
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ 
+        setting_value: JSON.stringify(newList),
+        updated_at: new Date().toISOString()
+      })
+      .eq('setting_key', 'ignored_ips');
+
+    if (error) {
+      toast.error('IP kaldırılamadı: ' + error.message);
+    } else {
+      setIgnoredIPs(newList);
+      toast.success(`IP kaldırıldı: ${ip}`);
+    }
+  };
+
+  const addMyIP = async () => {
+    if (!currentIP || currentIP === 'unknown') {
+      toast.error('IP adresiniz alınamadı, lütfen tekrar deneyin');
+      return;
+    }
+    await addIgnoredIP(currentIP);
   };
 
   const saveSettings = async () => {
@@ -1226,6 +1357,89 @@ export default function Admin() {
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
                   Kaydet
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* IP Filtering Settings */}
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>IP Bazlı Analytics Filtreleme</CardTitle>
+                <CardDescription>
+                  Belirtilen IP adreslerinden gelen ziyaretler analytics'e dahil edilmeyecek
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Current IP Display */}
+                <div className="p-4 bg-muted/50 rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium mb-1">Şu Anki IP Adresiniz</p>
+                      <p className="text-lg font-mono">{currentIP || 'Yükleniyor...'}</p>
+                    </div>
+                    <Button
+                      onClick={addMyIP}
+                      variant="outline"
+                      disabled={!currentIP || currentIP === 'unknown' || ignoredIPs.includes(currentIP)}
+                    >
+                      {ignoredIPs.includes(currentIP) ? 'Zaten Eklendi' : 'Benim IP\'mi Yoksay'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Ignored IPs List */}
+                {ignoredIPs.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Yoksayılan IP Adresleri ({ignoredIPs.length}/50)</Label>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {ignoredIPs.map(ip => (
+                        <div 
+                          key={ip}
+                          className="flex items-center justify-between p-3 bg-muted/50 rounded border"
+                        >
+                          <code className="text-sm font-mono">{ip}</code>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeIgnoredIP(ip)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual IP Addition */}
+                <div className="space-y-2">
+                  <Label htmlFor="new-ip">Manuel IP Ekle</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="new-ip"
+                      type="text"
+                      placeholder="örn: 192.168.1.1"
+                      value={newIP}
+                      onChange={(e) => setNewIP(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addIgnoredIP(newIP);
+                        }
+                      }}
+                    />
+                    <Button 
+                      onClick={() => addIgnoredIP(newIP)}
+                      disabled={!newIP}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Ekle
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    IPv4 formatında IP adresi girin. Maksimum 50 IP ekleyebilirsiniz.
+                  </p>
+                </div>
               </CardContent>
             </Card>
             </div>
