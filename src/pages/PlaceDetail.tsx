@@ -389,7 +389,7 @@ const PlaceDetail = () => {
                   className="w-40"
                 />
               ) : (
-                <Badge variant="outline">{place.category}</Badge>
+                <Badge variant="outline">{displayedCategory}</Badge>
               )}
               <TooltipProvider>
                 <Tooltip>
@@ -488,7 +488,7 @@ const PlaceDetail = () => {
                       ? `${place.description.substring(0, 400)}...`
                       : place.description}
                   </p>
-                  {place.description && place.description.length > 400 && (
+                  {displayedDescription && displayedDescription.length > 400 && (
                     <Button
                       variant="link"
                       size="sm"
