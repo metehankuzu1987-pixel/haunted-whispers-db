@@ -47,6 +47,30 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          id: string
+          setting_key: string
+          setting_value: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          setting_key: string
+          setting_value: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          setting_key?: string
+          setting_value?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       comments: {
         Row: {
           created_at: string | null
@@ -335,6 +359,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      trigger_active_scan: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
     }
     Enums: {

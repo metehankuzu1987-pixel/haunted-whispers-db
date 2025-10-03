@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Eye, Play } from 'lucide-react';
+import { Loader2, Plus, Trash2, Eye, Play, Settings } from 'lucide-react';
 import type { Place } from '@/types';
 
 const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
@@ -31,6 +32,7 @@ export default function Admin() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [scanLogs, setScanLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dataCollectionMethod, setDataCollectionMethod] = useState<'api' | 'ai'>('api');
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -53,6 +55,7 @@ export default function Admin() {
     if (isAdmin) {
       fetchPlaces();
       fetchScanLogs();
+      fetchSettings();
     }
   }, [isAdmin]);
 
@@ -80,6 +83,37 @@ export default function Admin() {
       console.error('Scan logs error:', error);
     } else {
       setScanLogs(data || []);
+    }
+  };
+
+  const fetchSettings = async () => {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('setting_value')
+      .eq('setting_key', 'data_collection_method')
+      .single();
+    
+    if (data && !error) {
+      setDataCollectionMethod(data.setting_value as 'api' | 'ai');
+    }
+  };
+
+  const saveSettings = async () => {
+    setLoading(true);
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ 
+        setting_value: dataCollectionMethod,
+        updated_at: new Date().toISOString()
+      })
+      .eq('setting_key', 'data_collection_method');
+
+    setLoading(false);
+
+    if (error) {
+      toast.error('Ayarlar kaydedilemedi: ' + error.message);
+    } else {
+      toast.success('Ayarlar kaydedildi! Otomatik taramalar şimdi ' + (dataCollectionMethod === 'ai' ? 'AI' : 'API') + ' kullanacak.');
     }
   };
 
@@ -147,22 +181,24 @@ export default function Admin() {
     }
   };
 
-  const triggerAIScan = async () => {
+  const triggerScan = async () => {
     setLoading(true);
-    toast.info('AI tarama başlatılıyor...');
+    const scanType = dataCollectionMethod === 'ai' ? 'AI' : 'API';
+    toast.info(`${scanType} tarama başlatılıyor...`);
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-scan', {
+      const functionName = dataCollectionMethod === 'ai' ? 'ai-scan' : 'api-scan';
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: { manual: true }
       });
 
       if (error) throw error;
 
-      toast.success(`Tarama tamamlandı! ${data.places_added || 0} yer eklendi.`);
+      toast.success(`${scanType} taraması tamamlandı! ${data.places_added || data.addedCount || 0} yer eklendi.`);
       fetchPlaces();
       fetchScanLogs();
     } catch (error: any) {
-      toast.error('AI tarama hatası: ' + error.message);
+      toast.error(`${scanType} tarama hatası: ` + error.message);
     } finally {
       setLoading(false);
     }
@@ -189,10 +225,11 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
-            <TabsTrigger value="ai">AI Tarama</TabsTrigger>
+            <TabsTrigger value="scan">Tarama</TabsTrigger>
+            <TabsTrigger value="settings">Ayarlar</TabsTrigger>
           </TabsList>
 
           <TabsContent value="places" className="space-y-4">
@@ -341,18 +378,19 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="ai" className="space-y-4">
+          <TabsContent value="scan" className="space-y-4">
             <Card className="glass">
               <CardHeader>
-                <CardTitle>AI Web Tarama</CardTitle>
+                <CardTitle>{dataCollectionMethod === 'ai' ? 'AI Web Tarama' : 'API Tarama'}</CardTitle>
                 <CardDescription>
-                  Sistem her 2 saatte bir otomatik tarama yapar. Manuel başlatmak için butona tıklayın.
+                  Sistem her 2 saatte bir otomatik olarak <strong>{dataCollectionMethod === 'ai' ? 'AI' : 'API'}</strong> taraması yapar. 
+                  Manuel başlatmak için butona tıklayın.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={triggerAIScan} disabled={loading} className="w-full">
+                <Button onClick={triggerScan} disabled={loading} className="w-full">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                  Manuel Tarama Başlat
+                  {dataCollectionMethod === 'ai' ? 'AI' : 'API'} Taraması Başlat
                 </Button>
               </CardContent>
             </Card>
@@ -381,6 +419,53 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>Veri Toplama Ayarları</CardTitle>
+                <CardDescription>
+                  Otomatik veri toplama yöntemini seçin. Bu ayar hem manuel hem de otomatik taramaları etkiler.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <RadioGroup 
+                  value={dataCollectionMethod} 
+                  onValueChange={(val) => setDataCollectionMethod(val as 'api' | 'ai')}
+                  className="space-y-4"
+                >
+                  <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+                    <RadioGroupItem value="api" id="api" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="api" className="text-base font-semibold cursor-pointer">
+                        API Tarama
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Wikipedia, Wikidata ve OpenStreetMap API'lerinden ücretsiz veri toplar.
+                        Daha güvenilir ancak sınırlı sonuçlar.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+                    <RadioGroupItem value="ai" id="ai" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="ai" className="text-base font-semibold cursor-pointer">
+                        AI Tarama
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Lovable AI kullanarak web'de akıllı arama yapar.
+                        Daha geniş sonuçlar ancak kullanım kredisi gerektirir.
+                      </p>
+                    </div>
+                  </div>
+                </RadioGroup>
+                <Button onClick={saveSettings} disabled={loading} className="w-full">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
+                  Kaydet
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
