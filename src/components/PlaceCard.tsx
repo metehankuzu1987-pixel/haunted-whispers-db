@@ -14,6 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useTranslateContent } from '@/hooks/useTranslateContent';
 
 interface PlaceCardProps {
   place: Place;
@@ -36,6 +37,12 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
     return text.substring(0, maxLength) + '...';
   };
   const { isAdmin } = useAuth();
+
+  // Content translation for EN
+  const textsToTranslate = lang === 'en' ? [place.name, place.description || ''] : [];
+  const { translations: tr } = useTranslateContent(textsToTranslate, 'tr', 'en');
+  const displayedName = lang === 'en' && tr[0] ? tr[0] : place.name;
+  const displayedDescription = lang === 'en' && tr[1] ? tr[1] : (place.description || '');
 
   const handleStatusChange = async (
     id: string,
@@ -67,7 +74,7 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-foreground mb-1">
-            {place.name}
+            {displayedName}
           </h3>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MapPin className="w-3 h-3" />
@@ -132,7 +139,7 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
 
       {/* Açıklama */}
       <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-        {truncateDescription(place.description)}
+        {truncateDescription(displayedDescription)}
       </p>
 
       {/* Kaynaklar ve Detay */}
