@@ -27,7 +27,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
   const canGoBack = location.pathname !== '/';
 
   return (
-    <header className="sticky top-0 z-50 bg-white shadow-md border-b-4 border-purple-200">
+    <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-50 via-pink-50 to-blue-50 shadow-md border-b-4 border-purple-200/50">
       <div className="container mx-auto px-4 py-4 md:py-5">
         <div className="flex items-center justify-between gap-4">
           {/* Logo & Başlık */}
@@ -107,7 +107,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                   <Globe className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-white border-purple-200 shadow-lg z-50">
+              <DropdownMenuContent align="end" className="bg-card border-border shadow-lg z-[60]">
                 <DropdownMenuItem onClick={() => onLangChange('tr')} className="hover:bg-purple-50">
                   🇹🇷 Türkçe
                 </DropdownMenuItem>
