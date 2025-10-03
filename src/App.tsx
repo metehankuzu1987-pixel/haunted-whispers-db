@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route } from "react-router-dom";
 import { HashRouter as BrowserRouter } from "react-router-dom";
+import { useEffect } from "react";
 import Index from "./pages/Index";
 import PlaceDetail from "./pages/PlaceDetail";
 import Auth from "./pages/Auth";
@@ -13,7 +14,21 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  useEffect(() => {
+    // Check if app is running inside an iframe
+    const isInIframe = window.self !== window.top;
+    
+    // Check if user is admin (has auth token)
+    const hasAuthToken = localStorage.getItem('sb-cgtlmnvwvhktopxavjan-auth-token');
+    
+    // If not in iframe and not admin, redirect to Blogger site
+    if (!isInIframe && !hasAuthToken) {
+      window.location.href = 'https://tr.tabirly.com/';
+    }
+  }, []);
+
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -30,6 +45,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;
