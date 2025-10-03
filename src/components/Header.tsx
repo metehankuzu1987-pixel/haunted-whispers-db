@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, ArrowLeft, RotateCw, Globe, LogIn, ShieldCheck, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,12 +27,36 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
   const { user, isAdmin, signOut } = useAuth();
   const canGoBack = location.pathname !== '/';
 
+  // Secret admin entry: click logo 5 times within 1.2s to open /auth
+  const clicksRef = useRef(0);
+  const timerRef = useRef<number | undefined>(undefined);
+  const handleLogoSecret = () => {
+    clicksRef.current += 1;
+
+    if (!timerRef.current) {
+      timerRef.current = window.setTimeout(() => {
+        clicksRef.current = 0;
+        timerRef.current = undefined;
+      }, 1200);
+    }
+
+    if (clicksRef.current >= 5) {
+      clicksRef.current = 0;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = undefined;
+      }
+      toast.info('Gizli giriş açıldı');
+      navigate('/auth');
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-50 via-pink-50 to-blue-50 shadow-md border-b-4 border-purple-200/50">
       <div className="container mx-auto px-4 py-4 md:py-5">
         <div className="flex items-center justify-between gap-4">
           {/* Logo & Başlık */}
-          <div className="flex items-center gap-4 md:gap-6 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => navigate('/')}>
+          <div className="flex items-center gap-4 md:gap-6 cursor-pointer hover:opacity-90 transition-opacity" onClick={handleLogoSecret}>
             <img 
               src={tabirlyLogo} 
               alt="Tabirly Logo" 
