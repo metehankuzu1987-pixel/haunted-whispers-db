@@ -6,6 +6,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import PlaceDetail from "./pages/PlaceDetail";
 import NotFound from "./pages/NotFound";
+// import { BrowserRouter } from "react-router-dom";
+import { HashRouter as BrowserRouter } from "react-router-dom";
+
 
 const queryClient = new QueryClient();
 
