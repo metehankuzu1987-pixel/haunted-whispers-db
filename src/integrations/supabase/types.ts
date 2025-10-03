@@ -353,12 +353,63 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      find_similar_places: {
+        Args: {
+          p_lat?: number
+          p_lon?: number
+          p_name: string
+          p_similarity_threshold?: number
+        }
+        Returns: {
+          distance_km: number
+          place_id: string
+          place_name: string
+          place_slug: string
+          similarity_score: number
+        }[]
+      }
+      gtrgm_compress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_decompress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_in: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_options: {
+        Args: { "": unknown }
+        Returns: undefined
+      }
+      gtrgm_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      merge_place_sources: {
+        Args: { new_sources: Json; target_place_id: string }
+        Returns: undefined
+      }
+      set_limit: {
+        Args: { "": number }
+        Returns: number
+      }
+      show_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      show_trgm: {
+        Args: { "": string }
+        Returns: string[]
       }
       trigger_active_scan: {
         Args: Record<PropertyKey, never>
