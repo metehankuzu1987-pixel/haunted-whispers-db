@@ -101,7 +101,7 @@ export const HeroSection = ({ lang = 'tr' }: HeroSectionProps) => {
         <h1 className="text-4xl md:text-6xl font-bold mb-4 text-foreground animate-fade-in">
           {displayedTitle}
         </h1>
-        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl animate-fade-in" style={{ animationDelay: '0.2s' }}>
+        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl animate-fade-in hidden sm:block" style={{ animationDelay: '0.2s' }}>
           {displayedSubtitle}
         </p>
       </div>
