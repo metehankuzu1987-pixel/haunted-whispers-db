@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock } from 'lucide-react';
+import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn } from 'lucide-react';
 import type { Place } from '@/types';
 
 const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
@@ -50,12 +50,7 @@ export default function Admin() {
     status: 'pending' as 'pending' | 'approved' | 'rejected'
   });
 
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      toast.error('Bu sayfaya erişim yetkiniz yok');
-      navigate('/');
-    }
-  }, [isAdmin, authLoading, navigate]);
+  // Don't redirect, just show access denied UI below
 
   useEffect(() => {
     if (isAdmin) {
@@ -356,7 +351,81 @@ export default function Admin() {
     );
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4 md:p-8">
+        <div className="max-w-2xl mx-auto mt-20">
+          <Card className="glass border-destructive/50">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+                <Shield className="w-8 h-8 text-destructive" />
+              </div>
+              <CardTitle className="text-2xl">Erişim Yetkiniz Yok</CardTitle>
+              <CardDescription className="text-base mt-2">
+                Bu sayfaya erişebilmek için admin yetkisine sahip olmanız gerekiyor.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-3">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Admin rolü nasıl atanır?
+                </h3>
+                <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
+                  <li>
+                    {user ? 'Zaten giriş yapmışsınız.' : 'Önce giriş yapın veya kayıt olun'}
+                  </li>
+                  <li>Backend panelini açın (aşağıdaki butonu kullanın)</li>
+                  <li>Auth → Users bölümünden kullanıcı ID'nizi kopyalayın</li>
+                  <li>Database → Tables → user_roles tablosuna gidin</li>
+                  <li>
+                    Insert Row ile yeni kayıt ekleyin:
+                    <div className="ml-4 mt-1 font-mono text-xs bg-background p-2 rounded">
+                      user_id: [kendi ID'niz]<br />
+                      role: admin
+                    </div>
+                  </li>
+                  <li>Sayfayı yenileyin</li>
+                </ol>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => {
+                    window.open('https://lovable.dev/projects/c60524be-c5e9-440f-b8d7-a79465a4c216/backend', '_blank');
+                  }}
+                  className="w-full"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Backend Panelini Aç
+                </Button>
+                
+                {!user && (
+                  <Button
+                    onClick={() => navigate('/auth')}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Giriş Yap / Kayıt Ol
+                  </Button>
+                )}
+                
+                <Button
+                  onClick={() => navigate('/')}
+                  variant="ghost"
+                  className="w-full"
+                >
+                  <Home className="w-4 h-4 mr-2" />
+                  Ana Sayfaya Dön
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4 md:p-8">

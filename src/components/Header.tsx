@@ -3,6 +3,7 @@ import { Home, ArrowLeft, RotateCw, Globe, Ghost, LogIn, ShieldCheck, LogOut } f
 import { Button } from '@/components/ui/button';
 import { useTranslation, Language } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,10 +72,18 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             )}
 
             {/* Admin Kısayol */}
-            {isAdmin && (
+            {user && (
               <Button
                 variant="outline"
-                onClick={() => navigate('/admin')}
+                onClick={() => {
+                  if (isAdmin) {
+                    navigate('/admin');
+                  } else {
+                    toast.error('Admin yetkisine sahip değilsiniz', {
+                      description: 'Admin paneline erişmek için yetki gerekiyor.'
+                    });
+                  }
+                }}
                 className="hover-glow hidden sm:inline-flex"
               >
                 <ShieldCheck className="w-4 h-4 mr-2" />
@@ -107,10 +116,18 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                   </>
                 )}
                 
-                {isAdmin && (
+                {user && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/admin')}>
+                    <DropdownMenuItem onClick={() => {
+                      if (isAdmin) {
+                        navigate('/admin');
+                      } else {
+                        toast.error('Admin yetkisine sahip değilsiniz', {
+                          description: 'Admin paneline erişmek için yetki gerekiyor.'
+                        });
+                      }
+                    }}>
                       <ShieldCheck className="w-4 h-4 mr-2" />
                       Admin Panel
                     </DropdownMenuItem>

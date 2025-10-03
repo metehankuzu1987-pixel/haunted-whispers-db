@@ -50,7 +50,34 @@ export const useAuth = () => {
         .maybeSingle();
 
       if (error) throw error;
-      setIsAdmin(!!data);
+      
+      // If user has admin role, set it
+      if (data) {
+        setIsAdmin(true);
+        return;
+      }
+      
+      // Check if there are any admins in the system
+      const { count, error: countError } = await supabase
+        .from('user_roles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'admin');
+      
+      if (countError) throw countError;
+      
+      // If no admins exist, make this user the first admin
+      if (count === 0) {
+        const { error: insertError } = await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: 'admin' });
+        
+        if (insertError) throw insertError;
+        
+        setIsAdmin(true);
+        toast.success('İlk admin olarak atandınız!');
+      } else {
+        setIsAdmin(false);
+      }
     } catch (error) {
       console.error('Error checking admin role:', error);
       setIsAdmin(false);
