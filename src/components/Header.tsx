@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, ArrowLeft, RotateCw, Globe, LogIn, ShieldCheck, LogOut, ExternalLink } from 'lucide-react';
+import { Home, ArrowLeft, RotateCw, Globe, LogIn, ShieldCheck, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslation, Language } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
@@ -50,13 +50,11 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
           {/* Navigasyon */}
           <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
-              size="icon"
+              variant="outline"
               onClick={() => window.open('https://tr.tabirly.com/', '_blank')}
-              className="text-gray-700 hover:bg-purple-50 rounded-lg transition-colors"
-              title="Tabirly Ana Sayfa"
+              className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg hidden sm:inline-flex transition-colors"
             >
-              <ExternalLink className="w-5 h-5" />
+              Ana Sayfa
             </Button>
 
             <Button
