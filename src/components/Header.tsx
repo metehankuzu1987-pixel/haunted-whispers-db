@@ -77,9 +77,10 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             <Button
               variant="outline"
               onClick={() => window.open('https://tr.tabirly.com/', '_blank')}
-              className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg hidden sm:inline-flex transition-colors"
+              className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg transition-colors text-xs sm:text-sm"
             >
-              {t('header.mainPage')}
+              <span className="hidden xs:inline">{t('header.mainPage')}</span>
+              <span className="inline xs:hidden">Ana Sayfa</span>
             </Button>
 
             <Button
