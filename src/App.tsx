@@ -24,7 +24,7 @@ const App = () => {
     
     // If not in iframe and not admin, redirect to Blogger site
     if (!isInIframe && !hasAuthToken) {
-      window.location.href = 'https://tr.tabirly.com/';
+      window.location.href = 'https://tr.tabirly.com/p/tabirly-perili-yerler-bilgi-bankas.html';
     }
   }, []);
 
