@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route } from "react-router-dom";
 import { HashRouter as BrowserRouter } from "react-router-dom";
 import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
 import PlaceDetail from "./pages/PlaceDetail";
 import Auth from "./pages/Auth";
@@ -16,16 +17,20 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    // Check if app is running inside an iframe
-    const isInIframe = window.self !== window.top;
+    const checkAuthAndRedirect = async () => {
+      // Check if app is running inside an iframe
+      const isInIframe = window.self !== window.top;
+      
+      // Check if user is actually authenticated via Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // If not in iframe and not authenticated, redirect to Blogger site
+      if (!isInIframe && !session) {
+        window.location.href = 'https://tr.tabirly.com/p/tabirly-perili-yerler-bilgi-bankas.html';
+      }
+    };
     
-    // Check if user is admin (has auth token)
-    const hasAuthToken = localStorage.getItem('sb-cgtlmnvwvhktopxavjan-auth-token');
-    
-    // If not in iframe and not admin, redirect to Blogger site
-    if (!isInIframe && !hasAuthToken) {
-      window.location.href = 'https://tr.tabirly.com/p/tabirly-perili-yerler-bilgi-bankas.html';
-    }
+    checkAuthAndRedirect();
   }, []);
 
   return (
