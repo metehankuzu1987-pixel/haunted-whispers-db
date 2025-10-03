@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { HeroMediaUpload } from '@/components/HeroMediaUpload';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn } from 'lucide-react';
+import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
 import type { Place } from '@/types';
 import { placeSchema } from '@/lib/validation';
 
@@ -41,6 +41,9 @@ export default function Admin() {
   const [scanningDuplicates, setScanningDuplicates] = useState(false);
   const [userCount, setUserCount] = useState(0);
   const [recentPlaces, setRecentPlaces] = useState<Place[]>([]);
+  const [securityLogs, setSecurityLogs] = useState<any[]>([]);
+  const [criticalCount, setCriticalCount] = useState(0);
+  const [showCriticalBanner, setShowCriticalBanner] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -61,7 +64,39 @@ export default function Admin() {
       fetchSettings();
       fetchUserCount();
       fetchRecentPlaces();
+      fetchSecurityLogs();
     }
+  }, [isAdmin]);
+
+  // Real-time security monitoring
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const channel = supabase
+      .channel('security-logs-realtime')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'logs',
+        filter: 'scope=eq.security'
+      }, (payload) => {
+        const newLog = payload.new;
+        setSecurityLogs(prev => [newLog, ...prev]);
+        
+        // Show toast for new security events
+        if (newLog.level === 'error') {
+          toast.error(`🚨 Güvenlik Uyarısı: ${newLog.message}`);
+          setCriticalCount(prev => prev + 1);
+          setShowCriticalBanner(true);
+        } else if (newLog.level === 'warn') {
+          toast.warning(`⚠️ Güvenlik: ${newLog.message}`);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [isAdmin]);
 
   const fetchPlaces = async () => {
@@ -117,6 +152,43 @@ export default function Admin() {
       .order('created_at', { ascending: false })
       .limit(5);
     setRecentPlaces((data || []) as any);
+  };
+
+  const fetchSecurityLogs = async () => {
+    const { data, error } = await supabase
+      .from('logs')
+      .select('*')
+      .eq('scope', 'security')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (!error && data) {
+      setSecurityLogs(data);
+      
+      // Count critical events in last 24 hours
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const criticalEvents = data.filter(
+        log => log.level === 'error' && log.created_at > yesterday
+      );
+      setCriticalCount(criticalEvents.length);
+      setShowCriticalBanner(criticalEvents.length > 0);
+    }
+  };
+
+  const getSeverityColor = (level: string) => {
+    switch (level) {
+      case 'error': return 'bg-destructive/20 text-destructive border-destructive/50';
+      case 'warn': return 'bg-orange-500/20 text-orange-300 border-orange-500/50';
+      default: return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
+    }
+  };
+
+  const getSeverityIcon = (level: string) => {
+    switch (level) {
+      case 'error': return <XCircle className="w-4 h-4" />;
+      case 'warn': return <AlertTriangle className="w-4 h-4" />;
+      default: return <Shield className="w-4 h-4" />;
+    }
   };
 
   const openBackend = (path: string = '') => {
@@ -446,6 +518,30 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Critical Events Banner */}
+        {showCriticalBanner && criticalCount > 0 && (
+          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/50 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              <div>
+                <p className="font-semibold text-destructive">
+                  {criticalCount} Kritik Güvenlik Olayı (Son 24 Saat)
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Güvenlik sekmesinden detayları inceleyebilirsiniz
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowCriticalBanner(false)}
+            >
+              <XCircle className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Admin Panel</h1>
           <Button onClick={() => navigate('/')} variant="outline">
@@ -454,12 +550,20 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
             <TabsTrigger value="apis">Gelişmiş API</TabsTrigger>
             <TabsTrigger value="duplicates">Duplikatlar</TabsTrigger>
+            <TabsTrigger value="security" className="relative">
+              Güvenlik
+              {criticalCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-white text-xs rounded-full flex items-center justify-center">
+                  {criticalCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="backend">Backend</TabsTrigger>
             <TabsTrigger value="settings">Ayarlar</TabsTrigger>
           </TabsList>
@@ -816,6 +920,70 @@ export default function Admin() {
                               </Button>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="security" className="space-y-4">
+            <Card className="glass">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-primary" />
+                    <CardTitle>Güvenlik Logları</CardTitle>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={fetchSecurityLogs}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Yenile
+                  </Button>
+                </div>
+                <CardDescription>
+                  Son 50 güvenlik olayı • Real-time güncellemeler aktif
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {securityLogs.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Shield className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>Henüz güvenlik logu yok</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {securityLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className={`p-4 border rounded-lg ${getSeverityColor(log.level)}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {getSeverityIcon(log.level)}
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between mb-2">
+                              <p className="font-semibold">{log.message}</p>
+                              <span className="text-xs opacity-75">
+                                {new Date(log.created_at).toLocaleString('tr-TR')}
+                              </span>
+                            </div>
+                            
+                            {log.meta_json && Object.keys(log.meta_json).length > 0 && (
+                              <details className="mt-2">
+                                <summary className="cursor-pointer text-sm opacity-75 hover:opacity-100">
+                                  Detayları Göster
+                                </summary>
+                                <div className="mt-2 p-3 bg-background/50 rounded text-xs font-mono overflow-auto">
+                                  <pre>{JSON.stringify(log.meta_json, null, 2)}</pre>
+                                </div>
+                              </details>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
