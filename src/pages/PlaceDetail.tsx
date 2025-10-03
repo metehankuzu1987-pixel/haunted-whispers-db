@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import {
   MapPin,
   CheckCircle2,
@@ -65,6 +66,7 @@ const PlaceDetail = () => {
 
   const navigate = useNavigate();
   const { isAdmin, user } = useAuth();
+  const { trackPageView, trackPlaceView, trackPlaceVote, trackComment } = useAnalytics();
 
   const handleAdminStatusChange = async (status: 'pending' | 'approved' | 'rejected') => {
     if (!place) return;
@@ -157,6 +159,10 @@ const PlaceDetail = () => {
 
   useEffect(() => {
     fetchData();
+    if (id) {
+      trackPageView(`/place/${id}`);
+      trackPlaceView(id);
+    }
   }, [id]);
 
   const fetchData = async () => {
@@ -206,6 +212,9 @@ const PlaceDetail = () => {
 
       setPlace({ ...place, [field]: place[field] + 1 });
       toast({ title: t('vote.success') });
+      
+      // Track vote
+      trackPlaceVote(place.id, type);
     } catch (error) {
       toast({ title: 'Hata', variant: 'destructive' });
     } finally {
@@ -250,6 +259,9 @@ const PlaceDetail = () => {
       setComments([data as Comment, ...comments]);
       setCommentForm({ nickname: '', message: '' });
       toast({ title: t('comments.success') });
+      
+      // Track comment
+      trackComment(place.id);
     } catch (error: any) {
       toast({ title: error.message || 'Hata oluştu', variant: 'destructive' });
     } finally {

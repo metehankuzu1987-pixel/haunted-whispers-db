@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Ghost } from 'lucide-react';
 import { signInSchema, signUpSchema } from '@/lib/validation';
 import { toast } from 'sonner';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -16,12 +17,17 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { trackPageView } = useAnalytics();
 
   useEffect(() => {
     if (user) {
       navigate('/');
     }
   }, [user, navigate]);
+
+  useEffect(() => {
+    trackPageView('/auth');
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

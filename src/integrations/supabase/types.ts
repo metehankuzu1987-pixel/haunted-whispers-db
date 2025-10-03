@@ -47,6 +47,39 @@ export type Database = {
         }
         Relationships: []
       }
+      analytics_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          is_admin: boolean | null
+          last_activity_at: string
+          page_count: number | null
+          session_id: string
+          started_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_admin?: boolean | null
+          last_activity_at?: string
+          page_count?: number | null
+          session_id: string
+          started_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_admin?: boolean | null
+          last_activity_at?: string
+          page_count?: number | null
+          session_id?: string
+          started_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           id: string
@@ -161,6 +194,77 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "moderation_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      page_views: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          id: string
+          ip_hash: string | null
+          page_path: string
+          referrer: string | null
+          session_id: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          page_path: string
+          referrer?: string | null
+          session_id: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          page_path?: string
+          referrer?: string | null
+          session_id?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      place_interactions: {
+        Row: {
+          created_at: string
+          id: string
+          interaction_type: string
+          place_id: string
+          session_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interaction_type: string
+          place_id: string
+          session_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interaction_type?: string
+          place_id?: string
+          session_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "place_interactions_place_id_fkey"
             columns: ["place_id"]
             isOneToOne: false
             referencedRelation: "places"
@@ -288,6 +392,36 @@ export type Database = {
           votes_down?: number | null
           votes_up?: number | null
           wikidata_id?: string | null
+        }
+        Relationships: []
+      }
+      search_queries: {
+        Row: {
+          created_at: string
+          filters_json: Json | null
+          id: string
+          query_text: string | null
+          result_count: number
+          session_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          filters_json?: Json | null
+          id?: string
+          query_text?: string | null
+          result_count?: number
+          session_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          filters_json?: Json | null
+          id?: string
+          query_text?: string | null
+          result_count?: number
+          session_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }

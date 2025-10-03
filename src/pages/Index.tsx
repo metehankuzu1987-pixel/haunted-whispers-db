@@ -7,6 +7,7 @@ import { Place } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation, Language } from '@/lib/i18n';
 import { Loader2 } from 'lucide-react';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 const COUNTRIES = [
   { code: 'TR', name: 'Türkiye' },
@@ -46,6 +47,7 @@ const Index = () => {
     sort: 'score',
     search: '',
   });
+  const { trackPageView, trackSearch } = useAnalytics();
 
   const fetchPlaces = async () => {
     setLoading(true);
@@ -91,10 +93,15 @@ const Index = () => {
       const { data, error } = await query.limit(50);
 
       if (error) throw error;
-      setPlaces((data || []).map(d => ({
+      const placesData = (data || []).map(d => ({
         ...d,
         sources_json: (d.sources_json as any) || []
-      })) as Place[]);
+      })) as Place[];
+      
+      setPlaces(placesData);
+      
+      // Track search
+      trackSearch(filters.search, filters, placesData.length);
     } catch (error) {
       console.error('Veri çekilirken hata:', error);
       setPlaces([]);
@@ -106,6 +113,11 @@ const Index = () => {
   useEffect(() => {
     fetchPlaces();
   }, [filters]);
+
+  useEffect(() => {
+    // Track page view on mount
+    trackPageView('/');
+  }, []);
 
   return (
     <div className="min-h-screen">

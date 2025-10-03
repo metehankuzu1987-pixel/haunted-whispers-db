@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { HeroMediaUpload } from '@/components/HeroMediaUpload';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn, AlertTriangle, RefreshCw, XCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn, AlertTriangle, RefreshCw, XCircle, BarChart3 } from 'lucide-react';
 import type { Place } from '@/types';
 import { placeSchema } from '@/lib/validation';
+import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 
 const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
 const COUNTRIES = [
@@ -550,12 +551,16 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
             <TabsTrigger value="apis">Gelişmiş API</TabsTrigger>
             <TabsTrigger value="duplicates">Duplikatlar</TabsTrigger>
+            <TabsTrigger value="analytics">
+              <BarChart3 className="w-4 h-4 mr-1" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="security" className="relative">
               Güvenlik
               {criticalCount > 0 && (
@@ -1224,6 +1229,11 @@ export default function Admin() {
               </CardContent>
             </Card>
             </div>
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics">
+            <AnalyticsDashboard />
           </TabsContent>
         </Tabs>
       </div>
