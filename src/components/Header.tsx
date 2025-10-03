@@ -75,15 +75,6 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
           {/* Navigasyon */}
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open('https://tr.tabirly.com/', '_blank')}
-              className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg transition-colors text-xs px-2 sm:px-4"
-            >
-              Ana Sayfa
-            </Button>
-
-            <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate('/')}

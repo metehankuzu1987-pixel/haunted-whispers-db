@@ -125,6 +125,14 @@ const Index = () => {
       
       <HeroSection lang={lang} />
 
+      {/* Floating Ana Sayfa Button */}
+      <button
+        onClick={() => window.open('https://tr.tabirly.com/', '_blank')}
+        className="fixed bottom-6 left-6 z-50 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg shadow-lg transition-all hover:scale-105 text-sm font-medium"
+      >
+        Ana Sayfa
+      </button>
+
       <main className="container mx-auto px-4 py-6 max-w-5xl">
         {/* Filtreler */}
         <div className="mb-6">
