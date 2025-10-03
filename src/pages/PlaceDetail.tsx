@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { commentSchema, sanitizeHtml } from '@/lib/validation';
 
 const PlaceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +64,7 @@ const PlaceDetail = () => {
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
 
   const handleAdminStatusChange = async (status: 'pending' | 'approved' | 'rejected') => {
     if (!place) return;
@@ -214,21 +215,32 @@ const PlaceDetail = () => {
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!place || !commentForm.nickname || !commentForm.message) return;
-    if (commentForm.message.length > 200) {
-      toast({ title: 'Mesaj çok uzun (max 200 karakter)', variant: 'destructive' });
+    if (!place || !user) {
+      toast({ title: 'Yorum yapmak için giriş yapmalısınız', variant: 'destructive' });
+      return;
+    }
+
+    // Validate input
+    const validation = commentSchema.safeParse(commentForm);
+    if (!validation.success) {
+      toast({ title: validation.error.errors[0].message, variant: 'destructive' });
       return;
     }
 
     setCommentSubmitting(true);
 
     try {
+      // Sanitize inputs
+      const sanitizedNickname = sanitizeHtml(validation.data.nickname);
+      const sanitizedMessage = sanitizeHtml(validation.data.message);
+
       const { data, error } = await supabase
         .from('comments')
         .insert({
           place_id: place.id,
-          nickname: commentForm.nickname,
-          message: commentForm.message,
+          user_id: user.id,
+          nickname: sanitizedNickname,
+          message: sanitizedMessage,
         })
         .select()
         .single();
@@ -238,8 +250,8 @@ const PlaceDetail = () => {
       setComments([data as Comment, ...comments]);
       setCommentForm({ nickname: '', message: '' });
       toast({ title: t('comments.success') });
-    } catch (error) {
-      toast({ title: 'Hata', variant: 'destructive' });
+    } catch (error: any) {
+      toast({ title: error.message || 'Hata oluştu', variant: 'destructive' });
     } finally {
       setCommentSubmitting(false);
     }
@@ -559,34 +571,45 @@ const PlaceDetail = () => {
             </h3>
 
             {/* Yorum Ekleme Formu */}
-            <form onSubmit={handleCommentSubmit} className="mb-6 space-y-3">
-              <Input
-                placeholder={t('comments.nickname')}
-                value={commentForm.nickname}
-                onChange={(e) => setCommentForm({ ...commentForm, nickname: e.target.value })}
-                maxLength={50}
-                required
-              />
-              <Textarea
-                placeholder={t('comments.message')}
-                value={commentForm.message}
-                onChange={(e) => setCommentForm({ ...commentForm, message: e.target.value })}
-                maxLength={200}
-                rows={3}
-                required
-              />
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">
-                  {commentForm.message.length}/200
-                </span>
-                <Button type="submit" disabled={commentSubmitting} className="hover-glow">
-                  {commentSubmitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  {t('comments.submit')}
+            {user ? (
+              <form onSubmit={handleCommentSubmit} className="mb-6 space-y-3">
+                <Input
+                  placeholder={t('comments.nickname')}
+                  value={commentForm.nickname}
+                  onChange={(e) => setCommentForm({ ...commentForm, nickname: e.target.value })}
+                  maxLength={50}
+                  required
+                />
+                <Textarea
+                  placeholder={t('comments.message')}
+                  value={commentForm.message}
+                  onChange={(e) => setCommentForm({ ...commentForm, message: e.target.value })}
+                  maxLength={500}
+                  rows={3}
+                  required
+                />
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">
+                    {commentForm.message.length}/500
+                  </span>
+                  <Button type="submit" disabled={commentSubmitting} className="hover-glow">
+                    {commentSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    {t('comments.submit')}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="mb-6 p-4 glass rounded-lg text-center">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Yorum yapmak için giriş yapmalısınız
+                </p>
+                <Button onClick={() => navigate('/auth')} variant="outline">
+                  Giriş Yap
                 </Button>
               </div>
-            </form>
+            )}
 
             {/* Yorum Listesi */}
             <div className="space-y-3">

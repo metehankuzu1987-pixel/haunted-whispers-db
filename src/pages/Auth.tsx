@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Ghost } from 'lucide-react';
+import { signInSchema, signUpSchema } from '@/lib/validation';
+import { toast } from 'sonner';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -23,24 +25,29 @@ export default function Auth() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    
+    const validation = signInSchema.safeParse({ email, password });
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
+      return;
+    }
     
     setLoading(true);
-    await signIn(email, password);
+    await signIn(validation.data.email, validation.data.password);
     setLoading(false);
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
     
-    if (password.length < 6) {
-      alert('Şifre en az 6 karakter olmalıdır');
+    const validation = signUpSchema.safeParse({ email, password });
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
       return;
     }
     
     setLoading(true);
-    await signUp(email, password);
+    await signUp(validation.data.email, validation.data.password);
     setLoading(false);
   };
 
@@ -109,13 +116,15 @@ export default function Auth() {
                   <Input
                     id="signup-password"
                     type="password"
-                    placeholder="••••••"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
-                  <p className="text-xs text-muted-foreground">En az 6 karakter</p>
+                  <p className="text-xs text-muted-foreground">
+                    En az 8 karakter, büyük/küçük harf ve rakam içermelidir
+                  </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Kaydediliyor...' : 'Kayıt Ol'}

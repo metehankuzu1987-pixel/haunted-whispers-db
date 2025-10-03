@@ -14,6 +14,7 @@ import { HeroMediaUpload } from '@/components/HeroMediaUpload';
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn } from 'lucide-react';
 import type { Place } from '@/types';
+import { placeSchema } from '@/lib/validation';
 
 const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
 const COUNTRIES = [
@@ -144,6 +145,14 @@ export default function Admin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form data
+    const validation = placeSchema.safeParse(formData);
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
+      return;
+    }
+
     setLoading(true);
 
     const slug = formData.slug || formData.name.toLowerCase()
@@ -152,8 +161,14 @@ export default function Admin() {
       .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
     const { error } = await supabase.from('places').insert({
-      ...formData,
+      name: validation.data.name,
       slug,
+      category: validation.data.category,
+      description: validation.data.description,
+      country_code: validation.data.country_code,
+      city: validation.data.city,
+      evidence_score: validation.data.evidence_score,
+      status: validation.data.status,
       human_approved: 1,
       ai_collected: 0,
       sources_json: []
