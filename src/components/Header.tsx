@@ -27,14 +27,14 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
   const canGoBack = location.pathname !== '/';
 
   return (
-    <header className="sticky top-0 z-50 glass border-b border-border/30">
+    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           {/* Logo & Başlık */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-            <img src={tabirlyLogo} alt="Tabirly Logo" className="w-8 h-8" />
-            <div className="hidden sm:block">
-              <h1 className="text-base md:text-lg font-bold text-foreground leading-tight">
+            <img src={tabirlyLogo} alt="Tabirly Logo" className="w-12 h-12 md:w-16 md:h-16" />
+            <div className="block">
+              <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">
                 Tabirly Perili Yerler Databank'ı
               </h1>
             </div>
@@ -46,7 +46,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
               variant="ghost"
               size="icon"
               onClick={() => navigate('/')}
-              className="hover-glow"
+              className="text-gray-700 hover:bg-gray-100"
             >
               <Home className="w-4 h-4" />
             </Button>
@@ -56,7 +56,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate(-1)}
-                className="hover-glow"
+                className="text-gray-700 hover:bg-gray-100"
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
@@ -67,7 +67,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 variant="ghost"
                 size="icon"
                 onClick={onRefresh}
-                className="hover-glow"
+                className="text-gray-700 hover:bg-gray-100"
               >
                 <RotateCw className="w-4 h-4" />
               </Button>
@@ -86,7 +86,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                     });
                   }
                 }}
-                className="hover-glow hidden sm:inline-flex"
+                className="text-gray-700 hover:bg-gray-100 border-gray-300 hidden sm:inline-flex"
               >
                 <ShieldCheck className="w-4 h-4 mr-2" />
                 Admin Panel
@@ -96,11 +96,11 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             {/* Dil Seçici */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="hover-glow">
+                <Button variant="outline" size="icon" className="text-gray-700 hover:bg-gray-100 border-gray-300">
                   <Globe className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="glass z-50">
+              <DropdownMenuContent align="end" className="bg-white border-gray-200 z-50">
                 <DropdownMenuItem onClick={() => onLangChange('tr')}>
                   🇹🇷 Türkçe
                 </DropdownMenuItem>
