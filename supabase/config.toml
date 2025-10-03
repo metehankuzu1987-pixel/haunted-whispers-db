@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.api-scan]
 verify_jwt = false
+
+[functions.multi-scan]
+verify_jwt = false

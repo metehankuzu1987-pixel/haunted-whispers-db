@@ -33,6 +33,8 @@ export default function Admin() {
   const [scanLogs, setScanLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataCollectionMethod, setDataCollectionMethod] = useState<'api' | 'ai'>('api');
+  const [enabledApis, setEnabledApis] = useState<string[]>(['dbpedia']);
+  const [useAllApis, setUseAllApis] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -204,6 +206,39 @@ export default function Admin() {
     }
   };
 
+  const triggerMultiScan = async () => {
+    try {
+      setLoading(true);
+      const apisToUse = useAllApis ? ['dbpedia', 'foursquare', 'google', 'geonames', 'atlas'] : enabledApis;
+      
+      toast.info(`Çoklu API taraması başlatılıyor (${apisToUse.length} API)...`);
+
+      const { data, error } = await supabase.functions.invoke('multi-scan', {
+        body: {
+          category: 'haunted_location',
+          country: 'TR',
+          enabledApis: apisToUse
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Çoklu tarama tamamlandı! ${data.added} yer eklendi (${data.unique_places} benzersiz bulundu)`);
+      fetchPlaces();
+      fetchScanLogs();
+    } catch (error: any) {
+      toast.error('Çoklu tarama hatası: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleApi = (api: string) => {
+    setEnabledApis(prev => 
+      prev.includes(api) ? prev.filter(a => a !== api) : [...prev, api]
+    );
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -225,10 +260,11 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
+            <TabsTrigger value="apis">Gelişmiş API</TabsTrigger>
             <TabsTrigger value="settings">Ayarlar</TabsTrigger>
           </TabsList>
 
@@ -419,6 +455,107 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="apis" className="space-y-4">
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>Çoklu API Entegrasyonu</CardTitle>
+                <CardDescription>
+                  Birden fazla kaynaktan paralel veri toplayın. API anahtarları Cloud ayarlarından girilmelidir.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-semibold">Tüm API'leri Kullan</p>
+                    <p className="text-sm text-muted-foreground">Mevcut tüm API'lerden veri topla</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={useAllApis}
+                    onChange={(e) => setUseAllApis(e.target.checked)}
+                    className="w-5 h-5"
+                  />
+                </div>
+
+                {!useAllApis && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Kullanılacak API'leri Seçin:</p>
+                    
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">DBpedia</p>
+                        <p className="text-xs text-muted-foreground">Ücretsiz, anahtar gerekmez</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={enabledApis.includes('dbpedia')}
+                        onChange={() => toggleApi('dbpedia')}
+                        className="w-4 h-4"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">Foursquare Places</p>
+                        <p className="text-xs text-muted-foreground">950 istek/gün - FOURSQUARE_API_KEY gerekli</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={enabledApis.includes('foursquare')}
+                        onChange={() => toggleApi('foursquare')}
+                        className="w-4 h-4"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">Google Places</p>
+                        <p className="text-xs text-muted-foreground">Sınırlı ücretsiz - GOOGLE_PLACES_API_KEY gerekli</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={enabledApis.includes('google')}
+                        onChange={() => toggleApi('google')}
+                        className="w-4 h-4"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">GeoNames</p>
+                        <p className="text-xs text-muted-foreground">Ücretsiz - GEONAMES_USERNAME gerekli</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={enabledApis.includes('geonames')}
+                        onChange={() => toggleApi('geonames')}
+                        className="w-4 h-4"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">Atlas Obscura</p>
+                        <p className="text-xs text-muted-foreground">Web scraping - anahtar gerekmez</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={enabledApis.includes('atlas')}
+                        onChange={() => toggleApi('atlas')}
+                        className="w-4 h-4"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Button onClick={triggerMultiScan} disabled={loading} className="w-full">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                  Çoklu API Taraması Başlat
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
