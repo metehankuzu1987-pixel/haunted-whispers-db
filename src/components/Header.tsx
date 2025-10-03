@@ -1,9 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, ArrowLeft, RotateCw, Globe, Ghost, LogIn, ShieldCheck, LogOut } from 'lucide-react';
+import { Home, ArrowLeft, RotateCw, Globe, LogIn, ShieldCheck, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslation, Language } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import tabirlyLogo from '@/assets/tabirly-logo.svg';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,11 +31,12 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           {/* Logo & Başlık */}
-          <div className="flex items-center gap-2">
-            <Ghost className="w-6 h-6 text-primary" />
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+            <img src={tabirlyLogo} alt="Tabirly Logo" className="w-8 h-8" />
             <div className="hidden sm:block">
-              <h1 className="text-lg font-bold text-foreground">{t('app.title')}</h1>
-              <p className="text-xs text-muted-foreground">{t('app.subtitle')}</p>
+              <h1 className="text-base md:text-lg font-bold text-foreground leading-tight">
+                Tabirly Perili Yerler Databank'ı
+              </h1>
             </div>
           </div>
 

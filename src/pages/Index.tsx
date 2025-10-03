@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
+import { HeroSection } from '@/components/HeroSection';
 import { Filters, FilterState } from '@/components/Filters';
 import { PlaceCard } from '@/components/PlaceCard';
 import { Place } from '@/types';
@@ -109,6 +110,8 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <Header lang={lang} onLangChange={setLang} onRefresh={fetchPlaces} />
+      
+      <HeroSection />
 
       <main className="container mx-auto px-4 py-6 max-w-5xl">
         {/* Filtreler */}
@@ -155,11 +158,17 @@ const Index = () => {
         <footer className="mt-12 pt-8 border-t border-border/30 text-center text-sm text-muted-foreground">
           <p>
             {t('footer.openData')} • {t('footer.removal')}:{' '}
-            <a href="mailto:removal@tabirly.com" className="text-primary hover:underline">
-              removal@tabirly.com
+            <a href="mailto:iletisim@tabirly.com" className="text-primary hover:underline">
+              iletisim@tabirly.com
             </a>
           </p>
-          <p className="mt-2">{t('footer.version')} 1.0.0</p>
+          <p className="mt-2">
+            {t('footer.contact')}:{' '}
+            <a href="mailto:iletisim@tabirly.com" className="text-primary hover:underline">
+              iletisim@tabirly.com
+            </a>
+          </p>
+          <p className="mt-2">{t('footer.version')} 1.0.0 • Tabirly</p>
         </footer>
       </main>
     </div>

@@ -78,6 +78,7 @@ export const translations = {
     
     'footer.openData': 'Açık veri ile beslenir',
     'footer.removal': 'Kaldırma talebi',
+    'footer.contact': 'İletişim',
     'footer.version': 'Sürüm',
   },
   
@@ -157,6 +158,7 @@ export const translations = {
     
     'footer.openData': 'Powered by open data',
     'footer.removal': 'Removal request',
+    'footer.contact': 'Contact',
     'footer.version': 'Version',
   }
 };

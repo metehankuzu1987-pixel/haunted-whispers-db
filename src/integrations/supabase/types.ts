@@ -288,6 +288,36 @@ export type Database = {
         }
         Relationships: []
       }
+      site_settings: {
+        Row: {
+          created_at: string | null
+          hero_media_type: string | null
+          hero_media_url: string | null
+          hero_subtitle: string | null
+          hero_title: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          hero_media_type?: string | null
+          hero_media_url?: string | null
+          hero_subtitle?: string | null
+          hero_title?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          hero_media_type?: string | null
+          hero_media_url?: string | null
+          hero_subtitle?: string | null
+          hero_title?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           content_hash: string | null

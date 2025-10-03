@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { HeroMediaUpload } from '@/components/HeroMediaUpload';
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn } from 'lucide-react';
 import type { Place } from '@/types';
@@ -990,13 +991,18 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="settings">
-            <Card className="glass">
-              <CardHeader>
-                <CardTitle>Veri Toplama Ayarları</CardTitle>
-                <CardDescription>
-                  Otomatik veri toplama yöntemini seçin. Bu ayar hem manuel hem de otomatik taramaları etkiler.
-                </CardDescription>
-              </CardHeader>
+            <div className="space-y-6">
+              {/* Hero Media Upload */}
+              <HeroMediaUpload />
+
+              {/* Data Collection Settings */}
+              <Card className="glass">
+                <CardHeader>
+                  <CardTitle>Veri Toplama Ayarları</CardTitle>
+                  <CardDescription>
+                    Otomatik veri toplama yöntemini seçin. Bu ayar hem manuel hem de otomatik taramaları etkiler.
+                  </CardDescription>
+                </CardHeader>
               <CardContent className="space-y-6">
                 <RadioGroup 
                   value={dataCollectionMethod} 
@@ -1034,6 +1040,7 @@ export default function Admin() {
                 </Button>
               </CardContent>
             </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
