@@ -1,12 +1,14 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, ArrowLeft, RotateCw, Globe, Ghost } from 'lucide-react';
+import { Home, ArrowLeft, RotateCw, Globe, Ghost, LogIn, ShieldCheck, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslation, Language } from '@/lib/i18n';
+import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 interface HeaderProps {
@@ -19,6 +21,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation(lang);
+  const { user, isAdmin, signOut } = useAuth();
   const canGoBack = location.pathname !== '/';
 
   return (
@@ -81,6 +84,36 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 <DropdownMenuItem onClick={() => onLangChange('en')}>
                   🇬🇧 English
                 </DropdownMenuItem>
+                
+                {!user && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/auth')}>
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Giriş Yap
+                    </DropdownMenuItem>
+                  </>
+                )}
+                
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      Admin Panel
+                    </DropdownMenuItem>
+                  </>
+                )}
+                
+                {user && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={signOut}>
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Çıkış Yap
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

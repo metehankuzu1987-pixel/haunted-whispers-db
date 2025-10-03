@@ -1,0 +1,391 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
+import { Loader2, Plus, Trash2, Eye, Play } from 'lucide-react';
+import type { Place } from '@/types';
+
+const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
+const COUNTRIES = [
+  { code: 'TR', name: 'Türkiye' },
+  { code: 'US', name: 'ABD' },
+  { code: 'UK', name: 'İngiltere' },
+  { code: 'DE', name: 'Almanya' },
+  { code: 'FR', name: 'Fransa' },
+  { code: 'IT', name: 'İtalya' },
+  { code: 'JP', name: 'Japonya' },
+  { code: 'UA', name: 'Ukrayna' },
+];
+
+export default function Admin() {
+  const navigate = useNavigate();
+  const { isAdmin, loading: authLoading, user } = useAuth();
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [scanLogs, setScanLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    slug: '',
+    category: '',
+    description: '',
+    country_code: '',
+    city: '',
+    evidence_score: 70,
+    status: 'pending' as 'pending' | 'approved' | 'rejected'
+  });
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      toast.error('Bu sayfaya erişim yetkiniz yok');
+      navigate('/');
+    }
+  }, [isAdmin, authLoading, navigate]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchPlaces();
+      fetchScanLogs();
+    }
+  }, [isAdmin]);
+
+  const fetchPlaces = async () => {
+    const { data, error } = await supabase
+      .from('places')
+      .select('*')
+      .order('created_at', { ascending: false});
+    
+    if (error) {
+      toast.error('Veriler yüklenemedi');
+    } else {
+      setPlaces((data || []) as any);
+    }
+  };
+
+  const fetchScanLogs = async () => {
+    const { data, error } = await supabase
+      .from('ai_scan_logs')
+      .select('*')
+      .order('scan_started_at', { ascending: false })
+      .limit(10);
+    
+    if (error) {
+      console.error('Scan logs error:', error);
+    } else {
+      setScanLogs(data || []);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const slug = formData.slug || formData.name.toLowerCase()
+      .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+      .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    const { error } = await supabase.from('places').insert({
+      ...formData,
+      slug,
+      human_approved: 1,
+      ai_collected: 0,
+      sources_json: []
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast.error('Hata: ' + error.message);
+    } else {
+      toast.success('Yer başarıyla eklendi!');
+      setFormData({
+        name: '',
+        slug: '',
+        category: '',
+        description: '',
+        country_code: '',
+        city: '',
+        evidence_score: 70,
+        status: 'pending'
+      });
+      fetchPlaces();
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu yeri silmek istediğinizden emin misiniz?')) return;
+
+    const { error } = await supabase.from('places').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Silme hatası: ' + error.message);
+    } else {
+      toast.success('Yer silindi');
+      fetchPlaces();
+    }
+  };
+
+  const handleStatusChange = async (id: string, status: string) => {
+    const { error } = await supabase
+      .from('places')
+      .update({ status })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Güncelleme hatası');
+    } else {
+      toast.success('Durum güncellendi');
+      fetchPlaces();
+    }
+  };
+
+  const triggerAIScan = async () => {
+    setLoading(true);
+    toast.info('AI tarama başlatılıyor...');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-scan', {
+        body: { manual: true }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Tarama tamamlandı! ${data.places_added || 0} yer eklendi.`);
+      fetchPlaces();
+      fetchScanLogs();
+    } catch (error: any) {
+      toast.error('AI tarama hatası: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) return null;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Admin Panel</h1>
+          <Button onClick={() => navigate('/')} variant="outline">
+            Ana Sayfa
+          </Button>
+        </div>
+
+        <Tabs defaultValue="places" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
+            <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
+            <TabsTrigger value="ai">AI Tarama</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="places" className="space-y-4">
+            {places.map((place) => (
+              <Card key={place.id} className="glass">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle>{place.name}</CardTitle>
+                      <CardDescription>
+                        {place.city}, {place.country_code} • {place.category}
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Select
+                        value={place.status}
+                        onValueChange={(val) => handleStatusChange(place.id, val)}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Bekliyor</SelectItem>
+                          <SelectItem value="approved">Onaylı</SelectItem>
+                          <SelectItem value="rejected">Reddedildi</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => navigate(`/place/${place.id}`)}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        onClick={() => handleDelete(place.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {place.description}
+                  </p>
+                  <div className="mt-2 flex gap-2 text-xs">
+                    <span className="badge">Skor: {place.evidence_score}</span>
+                    {place.ai_collected === 1 && <span className="badge">AI</span>}
+                    {place.human_approved === 1 && <span className="badge">İnsan Onaylı</span>}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="add">
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>Yeni Yer Ekle</CardTitle>
+                <CardDescription>Manuel olarak yeni bir gizemli yer ekleyin</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">İsim *</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Kategori *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(val) => setFormData({ ...formData, category: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seçin" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="country">Ülke *</Label>
+                      <Select
+                        value={formData.country_code}
+                        onValueChange={(val) => setFormData({ ...formData, country_code: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seçin" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {COUNTRIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.name} ({c.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="city">Şehir</Label>
+                      <Input
+                        id="city"
+                        value={formData.city || ''}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Açıklama</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description || ''}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={4}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="score">Kanıt Puanı: {formData.evidence_score}</Label>
+                    <Input
+                      id="score"
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={formData.evidence_score}
+                      onChange={(e) => setFormData({ ...formData, evidence_score: parseInt(e.target.value) })}
+                    />
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full">
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                    Ekle
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="ai" className="space-y-4">
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>AI Web Tarama</CardTitle>
+                <CardDescription>
+                  Sistem her 2 saatte bir otomatik tarama yapar. Manuel başlatmak için butona tıklayın.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={triggerAIScan} disabled={loading} className="w-full">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                  Manuel Tarama Başlat
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>Son Taramalar</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {scanLogs.map((log) => (
+                    <div key={log.id} className="p-3 border rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">
+                          {new Date(log.scan_started_at).toLocaleString('tr-TR')}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          log.status === 'completed' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Bulunan: {log.places_found} • Eklenen: {log.places_added}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
