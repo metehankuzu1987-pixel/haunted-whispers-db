@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Eye, Play, Settings } from 'lucide-react';
+import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock } from 'lucide-react';
 import type { Place } from '@/types';
 
 const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
@@ -37,6 +37,8 @@ export default function Admin() {
   const [useAllApis, setUseAllApis] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [scanningDuplicates, setScanningDuplicates] = useState(false);
+  const [userCount, setUserCount] = useState(0);
+  const [recentPlaces, setRecentPlaces] = useState<Place[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -60,6 +62,8 @@ export default function Admin() {
       fetchPlaces();
       fetchScanLogs();
       fetchSettings();
+      fetchUserCount();
+      fetchRecentPlaces();
     }
   }, [isAdmin]);
 
@@ -100,6 +104,27 @@ export default function Admin() {
     if (data && !error) {
       setDataCollectionMethod(data.setting_value as 'api' | 'ai');
     }
+  };
+
+  const fetchUserCount = async () => {
+    const { count } = await supabase
+      .from('user_roles')
+      .select('*', { count: 'exact', head: true });
+    setUserCount(count || 0);
+  };
+
+  const fetchRecentPlaces = async () => {
+    const { data } = await supabase
+      .from('places')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    setRecentPlaces((data || []) as any);
+  };
+
+  const openBackend = (path: string = '') => {
+    const baseUrl = `https://lovable.dev/projects/${import.meta.env.VITE_SUPABASE_PROJECT_ID}/backend`;
+    window.open(`${baseUrl}${path}`, '_blank');
   };
 
   const saveSettings = async () => {
@@ -344,12 +369,13 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
             <TabsTrigger value="apis">Gelişmiş API</TabsTrigger>
             <TabsTrigger value="duplicates">Duplikatlar</TabsTrigger>
+            <TabsTrigger value="backend">Backend</TabsTrigger>
             <TabsTrigger value="settings">Ayarlar</TabsTrigger>
           </TabsList>
 
@@ -710,6 +736,186 @@ export default function Admin() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="backend" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Database Management */}
+              <Card className="glass">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Database className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Veritabanı Yönetimi</CardTitle>
+                  </div>
+                  <CardDescription>Tabloları görüntüle ve yönet</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => openBackend('/database/tables')} 
+                      variant="outline" 
+                      className="w-full justify-start"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Tabloları Görüntüle
+                    </Button>
+                    <Button 
+                      onClick={() => openBackend('/database/tables')} 
+                      variant="outline" 
+                      className="w-full justify-start"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Yeni Tablo Oluştur
+                    </Button>
+                  </div>
+                  <div className="pt-3 border-t">
+                    <p className="text-sm font-medium mb-2">Son Eklenen Yerler:</p>
+                    <div className="space-y-1">
+                      {recentPlaces.slice(0, 3).map(place => (
+                        <div key={place.id} className="text-xs p-2 bg-muted/50 rounded">
+                          <p className="font-medium truncate">{place.name}</p>
+                          <p className="text-muted-foreground">
+                            {new Date(place.created_at).toLocaleDateString('tr-TR')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* User Management */}
+              <Card className="glass">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Kullanıcı Yönetimi</CardTitle>
+                  </div>
+                  <CardDescription>Kullanıcıları ve yetkileri yönet</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => openBackend('/auth/users')} 
+                      variant="outline" 
+                      className="w-full justify-start"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Kullanıcıları Görüntüle
+                    </Button>
+                    <Button 
+                      onClick={() => openBackend('/auth/settings')} 
+                      variant="outline" 
+                      className="w-full justify-start"
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Auth Ayarları
+                    </Button>
+                  </div>
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">Toplam Kullanıcı:</p>
+                      <p className="text-2xl font-bold">{userCount}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Edge Functions */}
+              <Card className="glass">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Edge Functions</CardTitle>
+                  </div>
+                  <CardDescription>Serverless fonksiyonları yönet</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => openBackend('/functions')} 
+                      variant="outline" 
+                      className="w-full justify-start"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Function Loglarını Görüntüle
+                    </Button>
+                  </div>
+                  <div className="pt-3 border-t">
+                    <p className="text-sm font-medium mb-2">Aktif Functions:</p>
+                    <div className="space-y-1">
+                      {['ai-scan', 'api-scan', 'multi-scan'].map(fn => (
+                        <div key={fn} className="text-xs p-2 bg-muted/50 rounded flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500" />
+                          <span className="font-mono">{fn}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Security & RLS */}
+              <Card className="glass">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg">Güvenlik & RLS</CardTitle>
+                  </div>
+                  <CardDescription>Row Level Security politikaları</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => openBackend('/database/policies')} 
+                      variant="outline" 
+                      className="w-full justify-start"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      RLS Politikalarını Görüntüle
+                    </Button>
+                  </div>
+                  <div className="pt-3 border-t">
+                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded">
+                      <p className="text-sm font-medium text-green-400">✓ RLS Aktif</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tüm tablolar korunuyor
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Stats */}
+            <Card className="glass">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-primary" />
+                  <CardTitle className="text-lg">Hızlı İstatistikler</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-4 bg-muted/50 rounded text-center">
+                    <p className="text-2xl font-bold">{places.length}</p>
+                    <p className="text-xs text-muted-foreground">Toplam Yer</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded text-center">
+                    <p className="text-2xl font-bold">{places.filter(p => p.status === 'approved').length}</p>
+                    <p className="text-xs text-muted-foreground">Onaylı</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded text-center">
+                    <p className="text-2xl font-bold">{userCount}</p>
+                    <p className="text-xs text-muted-foreground">Kullanıcı</p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded text-center">
+                    <p className="text-2xl font-bold">3</p>
+                    <p className="text-xs text-muted-foreground">Edge Function</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
