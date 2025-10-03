@@ -43,7 +43,7 @@ const Index = () => {
     country: '',
     city: '',
     category: '',
-    minScore: 60,
+    minScore: 0,
     sort: 'score',
     search: '',
   });
