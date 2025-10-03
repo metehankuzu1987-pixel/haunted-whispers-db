@@ -21,6 +21,10 @@ import {
   AlertCircle,
   Loader2,
   Trash2,
+  Edit,
+  Save,
+  X,
+  Plus,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -49,6 +53,10 @@ const PlaceDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [voteProcessing, setVoteProcessing] = useState(false);
+
+  // Edit modu
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<Place>>({});
 
   // Yorum formu
   const [commentForm, setCommentForm] = useState({ nickname: '', message: '' });
@@ -81,6 +89,69 @@ const PlaceDetail = () => {
       toast({ title: 'Yer silindi' });
       navigate('/');
     }
+  };
+
+  const handleEditToggle = () => {
+    if (!editMode && place) {
+      setEditForm({
+        name: place.name,
+        description: place.description || '',
+        category: place.category,
+        country_code: place.country_code,
+        city: place.city || '',
+        lat: place.lat || undefined,
+        lon: place.lon || undefined,
+        sources_json: place.sources_json || [],
+      });
+    }
+    setEditMode(!editMode);
+  };
+
+  const handleEditSave = async () => {
+    if (!place) return;
+    const { error } = await supabase
+      .from('places')
+      .update({
+        name: editForm.name,
+        description: editForm.description,
+        category: editForm.category,
+        country_code: editForm.country_code,
+        city: editForm.city,
+        lat: editForm.lat,
+        lon: editForm.lon,
+        sources_json: editForm.sources_json as any,
+      })
+      .eq('id', place.id);
+    
+    if (error) {
+      toast({ title: 'Güncelleme hatası', variant: 'destructive' });
+    } else {
+      toast({ title: 'Başarıyla güncellendi' });
+      setEditMode(false);
+      fetchData();
+    }
+  };
+
+  const addSource = () => {
+    setEditForm({
+      ...editForm,
+      sources_json: [
+        ...(editForm.sources_json || []),
+        { url: '', domain: '', type: 'web' }
+      ]
+    });
+  };
+
+  const removeSource = (index: number) => {
+    const newSources = [...(editForm.sources_json || [])];
+    newSources.splice(index, 1);
+    setEditForm({ ...editForm, sources_json: newSources });
+  };
+
+  const updateSource = (index: number, field: keyof typeof editForm.sources_json[0], value: string) => {
+    const newSources = [...(editForm.sources_json || [])];
+    newSources[index] = { ...newSources[index], [field]: value };
+    setEditForm({ ...editForm, sources_json: newSources });
   };
 
   useEffect(() => {
@@ -211,7 +282,15 @@ const PlaceDetail = () => {
           {/* Başlık */}
           <div>
             <div className="flex items-start justify-between gap-4 mb-3">
-              <h1 className="text-3xl font-bold text-foreground">{place.name}</h1>
+              {editMode ? (
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="text-3xl font-bold"
+                />
+              ) : (
+                <h1 className="text-3xl font-bold text-foreground">{place.name}</h1>
+              )}
               <div className="flex flex-col gap-2">
                 <TooltipProvider>
                   {place.ai_collected === 1 && (
@@ -247,14 +326,39 @@ const PlaceDetail = () => {
 
             <div className="flex items-center gap-2 text-muted-foreground mb-4">
               <MapPin className="w-4 h-4" />
-              <span>
-                {place.country_code}
-                {place.city && ` • ${place.city}`}
-              </span>
+              {editMode ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ülke kodu"
+                    value={editForm.country_code}
+                    onChange={(e) => setEditForm({ ...editForm, country_code: e.target.value })}
+                    className="w-24"
+                  />
+                  <Input
+                    placeholder="Şehir"
+                    value={editForm.city}
+                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                  />
+                </div>
+              ) : (
+                <span>
+                  {place.country_code}
+                  {place.city && ` • ${place.city}`}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{place.category}</Badge>
+              {editMode ? (
+                <Input
+                  placeholder="Kategori"
+                  value={editForm.category}
+                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                  className="w-40"
+                />
+              ) : (
+                <Badge variant="outline">{place.category}</Badge>
+              )}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -272,71 +376,153 @@ const PlaceDetail = () => {
 
           {isAdmin && (
             <div className="flex items-center gap-2 mt-4">
-              <Select value={place.status} onValueChange={(val) => handleAdminStatusChange(val as any)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Durum" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Bekliyor</SelectItem>
-                  <SelectItem value="approved">Onaylı</SelectItem>
-                  <SelectItem value="rejected">Reddedildi</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="destructive" onClick={handleAdminDelete}>
-                <Trash2 className="w-4 h-4 mr-2" /> Sil
-              </Button>
+              {editMode ? (
+                <>
+                  <Button onClick={handleEditSave} className="hover-glow">
+                    <Save className="w-4 h-4 mr-2" /> Kaydet
+                  </Button>
+                  <Button variant="outline" onClick={handleEditToggle}>
+                    <X className="w-4 h-4 mr-2" /> İptal
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={handleEditToggle}>
+                    <Edit className="w-4 h-4 mr-2" /> Düzenle
+                  </Button>
+                  <Select value={place.status} onValueChange={(val) => handleAdminStatusChange(val as any)}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Durum" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Bekliyor</SelectItem>
+                      <SelectItem value="approved">Onaylı</SelectItem>
+                      <SelectItem value="rejected">Reddedildi</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="destructive" onClick={handleAdminDelete}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Sil
+                  </Button>
+                </>
+              )}
             </div>
           )}
 
           {/* Koordinatlar */}
-          {(place.lat || place.lon) && (
+          {(place.lat || place.lon || editMode) && (
             <div className="pt-4 border-t border-border/30">
               <h3 className="text-sm font-semibold mb-2">{t('place.coordinates')}</h3>
-              <p className="text-sm text-muted-foreground">
-                {place.lat}, {place.lon}
-              </p>
+              {editMode ? (
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="Enlem"
+                    value={editForm.lat || ''}
+                    onChange={(e) => setEditForm({ ...editForm, lat: parseFloat(e.target.value) || undefined })}
+                  />
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="Boylam"
+                    value={editForm.lon || ''}
+                    onChange={(e) => setEditForm({ ...editForm, lon: parseFloat(e.target.value) || undefined })}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {place.lat}, {place.lon}
+                </p>
+              )}
             </div>
           )}
 
           {/* Açıklama */}
-          {place.description && (
+          {(place.description || editMode) && (
             <div className="pt-4 border-t border-border/30">
-              <p className="text-foreground leading-relaxed">
-                {showFullDescription
-                  ? place.description
-                  : place.description.length > 400
-                  ? `${place.description.substring(0, 400)}...`
-                  : place.description}
-              </p>
-              {place.description.length > 400 && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => setShowFullDescription(!showFullDescription)}
-                  className="mt-2 px-0"
-                >
-                  {showFullDescription ? t('place.readLess') : t('place.readMore')}
-                </Button>
+              {editMode ? (
+                <Textarea
+                  placeholder="Açıklama"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={8}
+                />
+              ) : (
+                <>
+                  <p className="text-foreground leading-relaxed">
+                    {showFullDescription
+                      ? place.description
+                      : place.description && place.description.length > 400
+                      ? `${place.description.substring(0, 400)}...`
+                      : place.description}
+                  </p>
+                  {place.description && place.description.length > 400 && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setShowFullDescription(!showFullDescription)}
+                      className="mt-2 px-0"
+                    >
+                      {showFullDescription ? t('place.readLess') : t('place.readMore')}
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {/* Kaynaklar */}
           <div className="pt-4 border-t border-border/30">
-            <h3 className="text-sm font-semibold mb-3">{t('place.sources')}</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">{t('place.sources')}</h3>
+              {editMode && (
+                <Button size="sm" variant="outline" onClick={addSource}>
+                  <Plus className="w-4 h-4 mr-1" /> Kaynak Ekle
+                </Button>
+              )}
+            </div>
             <div className="space-y-2">
-              {place.sources_json.map((source, idx) => (
-                <a
-                  key={idx}
-                  href={source.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  {source.domain} ({source.type})
-                </a>
-              ))}
+              {editMode ? (
+                (editForm.sources_json || []).map((source, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-2">
+                      <Input
+                        placeholder="URL"
+                        value={source.url}
+                        onChange={(e) => updateSource(idx, 'url', e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Domain"
+                          value={source.domain}
+                          onChange={(e) => updateSource(idx, 'domain', e.target.value)}
+                        />
+                        <Input
+                          placeholder="Tür"
+                          value={source.type}
+                          onChange={(e) => updateSource(idx, 'type', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <Button size="sm" variant="destructive" onClick={() => removeSource(idx)}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                place.sources_json.map((source, idx) => (
+                  <a
+                    key={idx}
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    {source.domain} ({source.type})
+                  </a>
+                ))
+              )}
             </div>
           </div>
 
