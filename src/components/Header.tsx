@@ -64,7 +64,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             />
             <div className="block">
               <h1 className="text-lg md:text-2xl font-bold text-gray-900 leading-tight tracking-tight">
-                {t('header.title')}
+                PeriliBank
               </h1>
               <p className="text-xs md:text-sm text-gray-600 mt-1 hidden sm:block">
                 {t('app.subtitle')}
