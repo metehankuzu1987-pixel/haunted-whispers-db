@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Language } from '@/lib/i18n';
+import { useTranslateContent } from '@/hooks/useTranslateContent';
 
 interface HeroSettings {
   hero_media_url: string | null;
@@ -8,13 +10,24 @@ interface HeroSettings {
   hero_subtitle: string;
 }
 
-export const HeroSection = () => {
+interface HeroSectionProps {
+  lang?: Language;
+}
+
+export const HeroSection = ({ lang = 'tr' }: HeroSectionProps) => {
   const [settings, setSettings] = useState<HeroSettings>({
     hero_media_url: null,
     hero_media_type: null,
     hero_title: 'Tabirly Perili Yerler Databank\'ı',
     hero_subtitle: 'Dünyanın lanetli ve perili yerlerini keşfedin',
   });
+
+  // Translate hero content if lang is 'en'
+  const textsToTranslate = lang === 'en' ? [settings.hero_title, settings.hero_subtitle] : [];
+  const { translations } = useTranslateContent(textsToTranslate, 'tr', 'en');
+  
+  const displayedTitle = lang === 'en' && translations.length > 0 ? translations[0] : settings.hero_title;
+  const displayedSubtitle = lang === 'en' && translations.length > 1 ? translations[1] : settings.hero_subtitle;
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -86,10 +99,10 @@ export const HeroSection = () => {
       {/* Content */}
       <div className="relative z-20 container mx-auto px-4 h-full min-h-[60vh] flex flex-col items-center justify-center text-center">
         <h1 className="text-4xl md:text-6xl font-bold mb-4 text-foreground animate-fade-in">
-          {settings.hero_title}
+          {displayedTitle}
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground max-w-2xl animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          {settings.hero_subtitle}
+          {displayedSubtitle}
         </p>
       </div>
     </section>

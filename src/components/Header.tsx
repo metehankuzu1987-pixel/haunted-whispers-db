@@ -39,10 +39,10 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             />
             <div className="block">
               <h1 className="text-lg md:text-2xl font-bold text-gray-900 leading-tight tracking-tight">
-                Tabirly - Perili Yerler Bilgi Bankası
+                {t('header.title')}
               </h1>
               <p className="text-xs md:text-sm text-gray-600 mt-1 hidden sm:block">
-                Dünyanın Gizemli Yerleri
+                {t('app.subtitle')}
               </p>
             </div>
           </div>
@@ -54,7 +54,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
               onClick={() => window.open('https://tr.tabirly.com/', '_blank')}
               className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg hidden sm:inline-flex transition-colors"
             >
-              Ana Sayfa
+              {t('header.mainPage')}
             </Button>
 
             <Button
@@ -104,7 +104,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg hidden sm:inline-flex transition-colors"
               >
                 <ShieldCheck className="w-5 h-5 mr-2" />
-                Admin Panel
+                {t('header.adminPanel')}
               </Button>
             )}
 
@@ -128,7 +128,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/auth')} className="hover:bg-purple-50">
                       <LogIn className="w-5 h-5 mr-2" />
-                      Giriş Yap
+                      {t('header.login')}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -146,7 +146,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                       }
                     }} className="hover:bg-purple-50">
                       <ShieldCheck className="w-5 h-5 mr-2" />
-                      Admin Panel
+                      {t('header.adminPanel')}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -156,7 +156,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={signOut} className="hover:bg-purple-50">
                       <LogOut className="w-5 h-5 mr-2" />
-                      Çıkış Yap
+                      {t('header.logout')}
                     </DropdownMenuItem>
                   </>
                 )}

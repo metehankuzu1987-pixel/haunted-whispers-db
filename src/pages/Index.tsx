@@ -123,7 +123,7 @@ const Index = () => {
     <div className="min-h-screen">
       <Header lang={lang} onLangChange={setLang} onRefresh={fetchPlaces} />
       
-      <HeroSection />
+      <HeroSection lang={lang} />
 
       <main className="container mx-auto px-4 py-6 max-w-5xl">
         {/* Filtreler */}

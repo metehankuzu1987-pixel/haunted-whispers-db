@@ -6,6 +6,12 @@ export const translations = {
     'app.title': 'Tabirly Haunted DB',
     'app.subtitle': 'Dünyanın Lanetli ve Perili Yerleri',
     
+    'header.title': 'Tabirly - Perili Yerler Bilgi Bankası',
+    'header.mainPage': 'Ana Sayfa',
+    'header.adminPanel': 'Admin Panel',
+    'header.login': 'Giriş Yap',
+    'header.logout': 'Çıkış Yap',
+    
     'disclosure.aiCollected': 'AI ile toplandı',
     'disclosure.aiTooltip': 'Bu bilgiler açık kaynaklardan otomatik tarandı',
     'disclosure.humanApproved': 'İnsan onaylı',
@@ -85,6 +91,12 @@ export const translations = {
   en: {
     'app.title': 'Tabirly Haunted DB',
     'app.subtitle': 'World\'s Cursed and Haunted Places',
+    
+    'header.title': 'Tabirly - Haunted Places Database',
+    'header.mainPage': 'Main Page',
+    'header.adminPanel': 'Admin Panel',
+    'header.login': 'Login',
+    'header.logout': 'Logout',
     
     'disclosure.aiCollected': 'AI collected',
     'disclosure.aiTooltip': 'Automatically scraped from open sources',
