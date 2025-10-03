@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_scan_logs: {
+        Row: {
+          error_message: string | null
+          id: string
+          places_added: number | null
+          places_found: number | null
+          scan_completed_at: string | null
+          scan_started_at: string | null
+          search_query: string | null
+          status: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          places_added?: number | null
+          places_found?: number | null
+          scan_completed_at?: string | null
+          scan_started_at?: string | null
+          search_query?: string | null
+          status?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          places_added?: number | null
+          places_found?: number | null
+          scan_completed_at?: string | null
+          scan_started_at?: string | null
+          search_query?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       comments: {
         Row: {
           created_at: string | null
@@ -147,6 +180,7 @@ export type Database = {
       places: {
         Row: {
           ai_collected: number | null
+          ai_scan_count: number | null
           category: string
           city: string | null
           country_code: string
@@ -156,6 +190,7 @@ export type Database = {
           first_seen_at: string | null
           human_approved: number | null
           id: string
+          last_ai_scan_at: string | null
           last_seen_at: string | null
           lat: number | null
           lon: number | null
@@ -173,6 +208,7 @@ export type Database = {
         }
         Insert: {
           ai_collected?: number | null
+          ai_scan_count?: number | null
           category: string
           city?: string | null
           country_code: string
@@ -182,6 +218,7 @@ export type Database = {
           first_seen_at?: string | null
           human_approved?: number | null
           id?: string
+          last_ai_scan_at?: string | null
           last_seen_at?: string | null
           lat?: number | null
           lon?: number | null
@@ -199,6 +236,7 @@ export type Database = {
         }
         Update: {
           ai_collected?: number | null
+          ai_scan_count?: number | null
           category?: string
           city?: string | null
           country_code?: string
@@ -208,6 +246,7 @@ export type Database = {
           first_seen_at?: string | null
           human_approved?: number | null
           id?: string
+          last_ai_scan_at?: string | null
           last_seen_at?: string | null
           lat?: number | null
           lon?: number | null
@@ -264,15 +303,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -399,6 +465,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
