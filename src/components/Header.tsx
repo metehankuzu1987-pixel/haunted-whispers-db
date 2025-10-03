@@ -119,21 +119,11 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 <DropdownMenuItem onClick={() => onLangChange('tr')} className="hover:bg-purple-50">
                   🇹🇷 Türkçe
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onLangChange('en')} className="hover:bg-purple-50">
-                  🇬🇧 English
-                </DropdownMenuItem>
-                
-                {!user && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/auth')} className="hover:bg-purple-50">
-                      <LogIn className="w-5 h-5 mr-2" />
-                      {t('header.login')}
-                    </DropdownMenuItem>
-                  </>
-                )}
-                
-                {user && (
+              <DropdownMenuItem onClick={() => onLangChange('en')} className="hover:bg-purple-50">
+                🇬🇧 English
+              </DropdownMenuItem>
+              
+              {user && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => {

@@ -56,7 +56,9 @@ export default function Admin() {
     country_code: '',
     city: '',
     evidence_score: 70,
-    status: 'pending' as 'pending' | 'approved' | 'rejected'
+    status: 'pending' as 'pending' | 'approved' | 'rejected',
+    name_en: '',
+    description_en: ''
   });
 
   // Don't redirect, just show access denied UI below
@@ -375,7 +377,9 @@ export default function Admin() {
       status: validation.data.status,
       human_approved: 1,
       ai_collected: 0,
-      sources_json: []
+      sources_json: [],
+      name_en: formData.name_en || null,
+      description_en: formData.description_en || null
     });
 
     setLoading(false);
@@ -392,7 +396,9 @@ export default function Admin() {
         country_code: '',
         city: '',
         evidence_score: 70,
-        status: 'pending'
+        status: 'pending',
+        name_en: '',
+        description_en: ''
       });
       fetchPlaces();
     }
@@ -421,6 +427,34 @@ export default function Admin() {
       toast.error('Güncelleme hatası');
     } else {
       toast.success('Durum güncellendi');
+      fetchPlaces();
+    }
+  };
+
+  const bulkApprove = async () => {
+    const pendingPlaces = places.filter(p => p.status === 'pending' || p.status === 'pending_high');
+    
+    if (pendingPlaces.length === 0) {
+      toast.info('Onaylanacak bekleyen yer yok');
+      return;
+    }
+
+    if (!confirm(`${pendingPlaces.length} yeri toplu olarak onaylamak istediğinizden emin misiniz?`)) {
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase
+      .from('places')
+      .update({ status: 'approved' })
+      .in('id', pendingPlaces.map(p => p.id));
+    
+    setLoading(false);
+
+    if (error) {
+      toast.error('Toplu onaylama hatası: ' + error.message);
+    } else {
+      toast.success(`${pendingPlaces.length} yer onaylandı ve yayınlandı!`);
       fetchPlaces();
     }
   };
@@ -705,6 +739,27 @@ export default function Admin() {
           </TabsList>
 
           <TabsContent value="places" className="space-y-4">
+            {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length > 0 && (
+              <Card className="glass border-2 border-primary/50">
+                <CardHeader>
+                  <CardTitle>Toplu İşlemler</CardTitle>
+                  <CardDescription>
+                    {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length} bekleyen yer var
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button 
+                    onClick={bulkApprove} 
+                    disabled={loading}
+                    className="w-full"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Tüm Bekleyenleri Onayla ve Yayınla
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            
             {places.map((place) => (
               <Card key={place.id} className="glass">
                 <CardHeader>
@@ -822,7 +877,7 @@ export default function Admin() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="description">Açıklama</Label>
+                    <Label htmlFor="description">Açıklama (Türkçe)</Label>
                     <Textarea
                       id="description"
                       value={formData.description || ''}
@@ -830,6 +885,30 @@ export default function Admin() {
                       rows={4}
                     />
                   </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name_en">İsim (İngilizce) - Opsiyonel</Label>
+                      <Input
+                        id="name_en"
+                        value={formData.name_en || ''}
+                        onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
+                        placeholder="English name (optional)"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="description_en">Açıklama (İngilizce) - Opsiyonel</Label>
+                    <Textarea
+                      id="description_en"
+                      value={formData.description_en || ''}
+                      onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
+                      rows={4}
+                      placeholder="English description (optional)"
+                    />
+                  </div>
+                  
                   <div className="space-y-2">
                     <Label htmlFor="score">Kanıt Puanı: {formData.evidence_score}</Label>
                     <Input

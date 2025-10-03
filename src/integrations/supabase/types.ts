@@ -317,6 +317,7 @@ export type Database = {
           country_code: string
           created_at: string | null
           description: string | null
+          description_en: string | null
           evidence_score: number | null
           first_seen_at: string | null
           human_approved: number | null
@@ -326,6 +327,7 @@ export type Database = {
           lat: number | null
           lon: number | null
           name: string
+          name_en: string | null
           osm_id: string | null
           rating_count: number | null
           rating_sum: number | null
@@ -345,6 +347,7 @@ export type Database = {
           country_code: string
           created_at?: string | null
           description?: string | null
+          description_en?: string | null
           evidence_score?: number | null
           first_seen_at?: string | null
           human_approved?: number | null
@@ -354,6 +357,7 @@ export type Database = {
           lat?: number | null
           lon?: number | null
           name: string
+          name_en?: string | null
           osm_id?: string | null
           rating_count?: number | null
           rating_sum?: number | null
@@ -373,6 +377,7 @@ export type Database = {
           country_code?: string
           created_at?: string | null
           description?: string | null
+          description_en?: string | null
           evidence_score?: number | null
           first_seen_at?: string | null
           human_approved?: number | null
@@ -382,6 +387,7 @@ export type Database = {
           lat?: number | null
           lon?: number | null
           name?: string
+          name_en?: string | null
           osm_id?: string | null
           rating_count?: number | null
           rating_sum?: number | null
