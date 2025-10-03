@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeSlug } from "../_shared/normalize-slug.ts";
+import { checkForDuplicates } from "../_shared/duplicate-checker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -122,12 +124,34 @@ serve(async (req) => {
     const uniquePlaces = deduplicatePlaces(allPlaces);
     console.log(`Total unique places: ${uniquePlaces.length}`);
 
-    // Save to database
+    // Save to database with comprehensive duplicate check
     let addedCount = 0;
     for (const place of uniquePlaces) {
-      const slug = place.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const slug = normalizeSlug(place.name);
       
-      const { error } = await supabase.from('places').upsert({
+      // Comprehensive duplicate check
+      const duplicateCheck = await checkForDuplicates(supabase, {
+        name: place.name,
+        lat: place.lat,
+        lon: place.lon,
+        wikidata_id: null,
+        osm_id: null
+      });
+
+      if (duplicateCheck.isDuplicate && duplicateCheck.existingPlaceId) {
+        console.log(`Duplicate found: ${place.name} - ${duplicateCheck.reason}`);
+        
+        // Merge sources
+        await supabase.rpc('merge_place_sources', {
+          target_place_id: duplicateCheck.existingPlaceId,
+          new_sources: place.sources
+        });
+        
+        continue;
+      }
+      
+      // Insert new place
+      const { error } = await supabase.from('places').insert({
         name: place.name,
         slug,
         category: place.category,
@@ -140,7 +164,7 @@ serve(async (req) => {
         status: 'pending',
         ai_collected: 0,
         evidence_score: place.sources.length * 10,
-      }, { onConflict: 'slug' });
+      });
 
       if (!error) addedCount++;
     }

@@ -35,6 +35,8 @@ export default function Admin() {
   const [dataCollectionMethod, setDataCollectionMethod] = useState<'api' | 'ai'>('api');
   const [enabledApis, setEnabledApis] = useState<string[]>(['dbpedia']);
   const [useAllApis, setUseAllApis] = useState(false);
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [scanningDuplicates, setScanningDuplicates] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -239,6 +241,88 @@ export default function Admin() {
     );
   };
 
+  const fetchPotentialDuplicates = async () => {
+    try {
+      setScanningDuplicates(true);
+      const { data: allPlaces } = await supabase
+        .from('places')
+        .select('id, name, slug, lat, lon, sources_json, status')
+        .order('created_at', { ascending: false });
+      
+      if (!allPlaces) return;
+      
+      const potentialDups: any[] = [];
+      
+      for (const place of allPlaces) {
+        if (!place.lat || !place.lon) continue;
+        
+        const { data: similar } = await supabase
+          .rpc('find_similar_places', {
+            p_name: place.name,
+            p_lat: place.lat,
+            p_lon: place.lon,
+            p_similarity_threshold: 0.7
+          });
+        
+        if (similar && similar.length > 1) {
+          const otherSimilar = similar.filter(s => s.place_id !== place.id);
+          if (otherSimilar.length > 0) {
+            potentialDups.push({
+              mainPlace: place,
+              similarPlaces: otherSimilar
+            });
+          }
+        }
+      }
+      
+      setDuplicates(potentialDups);
+      toast.success(`${potentialDups.length} olası duplikat grup bulundu`);
+    } catch (error: any) {
+      toast.error('Duplikat tarama hatası: ' + error.message);
+    } finally {
+      setScanningDuplicates(false);
+    }
+  };
+
+  const mergePlaces = async (targetId: string, sourceId: string) => {
+    try {
+      const { data: sourcePlace } = await supabase
+        .from('places')
+        .select('*')
+        .eq('id', sourceId)
+        .single();
+      
+      if (!sourcePlace) {
+        toast.error('Kaynak mekan bulunamadı');
+        return;
+      }
+      
+      // Merge sources
+      await supabase.rpc('merge_place_sources', {
+        target_place_id: targetId,
+        new_sources: sourcePlace.sources_json || []
+      });
+      
+      // Move comments
+      await supabase
+        .from('comments')
+        .update({ place_id: targetId })
+        .eq('place_id', sourceId);
+      
+      // Delete source place
+      await supabase
+        .from('places')
+        .delete()
+        .eq('id', sourceId);
+      
+      toast.success('Mekanlar başarıyla birleştirildi!');
+      await fetchPotentialDuplicates();
+      await fetchPlaces();
+    } catch (error: any) {
+      toast.error('Birleştirme hatası: ' + error.message);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -260,11 +344,12 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
             <TabsTrigger value="apis">Gelişmiş API</TabsTrigger>
+            <TabsTrigger value="duplicates">Duplikatlar</TabsTrigger>
             <TabsTrigger value="settings">Ayarlar</TabsTrigger>
           </TabsList>
 
@@ -556,6 +641,75 @@ export default function Admin() {
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                   Çoklu API Taraması Başlat
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="duplicates">
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>🔍 Olası Duplikat Mekanlar</CardTitle>
+                <CardDescription>
+                  Benzer isim veya koordinatlara sahip mekanları inceleyin ve birleştirin
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={fetchPotentialDuplicates} 
+                  disabled={scanningDuplicates}
+                  className="mb-4"
+                >
+                  {scanningDuplicates ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Taranıyor...
+                    </>
+                  ) : (
+                    'Duplikatları Tara'
+                  )}
+                </Button>
+                
+                {duplicates.length === 0 ? (
+                  <p className="text-muted-foreground">Duplikat taraması yapılmadı veya duplikat bulunamadı ✅</p>
+                ) : (
+                  <div className="space-y-4">
+                    {duplicates.map((dup, idx) => (
+                      <div key={idx} className="border rounded-lg p-4 space-y-3">
+                        <div>
+                          <h3 className="font-semibold text-lg">{dup.mainPlace.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {dup.mainPlace.slug} • {dup.mainPlace.status}
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Benzer Mekanlar:</p>
+                          {dup.similarPlaces.map((similar: any) => (
+                            <div 
+                              key={similar.place_id} 
+                              className="flex items-center justify-between p-3 bg-muted/50 rounded border"
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium">{similar.place_name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Benzerlik: {Math.round(similar.similarity_score * 100)}%
+                                  {similar.distance_km !== null && ` • Mesafe: ${similar.distance_km.toFixed(2)}km`}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => mergePlaces(dup.mainPlace.id, similar.place_id)}
+                              >
+                                Birleştir
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

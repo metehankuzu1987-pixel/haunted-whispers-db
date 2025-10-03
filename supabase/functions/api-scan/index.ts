@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeSlug } from "../_shared/normalize-slug.ts";
+import { checkForDuplicates } from "../_shared/duplicate-checker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,24 +81,7 @@ serve(async (req) => {
         const name = result.placeLabel?.value;
         if (!name || name.startsWith('Q')) continue; // Skip items without proper labels
 
-        // Generate slug
-        const slug = name.toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '');
-
-        // Check if place already exists
-        const { data: existing } = await supabase
-          .from('places')
-          .select('id')
-          .eq('slug', slug)
-          .single();
-
-        if (existing) {
-          console.log(`Place already exists: ${name}`);
-          continue;
-        }
-
-        // Extract coordinates
+        // Extract coordinates first (needed for duplicate check)
         let lat = null;
         let lon = null;
         if (result.coord?.value) {
@@ -106,6 +91,38 @@ serve(async (req) => {
             lat = parseFloat(coordMatch[2]);
           }
         }
+
+        const wikidataId = result.place?.value.split('/').pop() || null;
+
+        // Comprehensive duplicate check
+        const duplicateCheck = await checkForDuplicates(supabase, {
+          name,
+          lat,
+          lon,
+          wikidata_id: wikidataId,
+          osm_id: null
+        });
+
+        if (duplicateCheck.isDuplicate && duplicateCheck.existingPlaceId) {
+          console.log(`Duplicate found: ${name} - ${duplicateCheck.reason}`);
+          
+          // Merge sources
+          const newSource = {
+            url: result.place?.value || 'https://wikidata.org',
+            domain: 'wikidata.org',
+            type: 'api'
+          };
+          
+          await supabase.rpc('merge_place_sources', {
+            target_place_id: duplicateCheck.existingPlaceId,
+            new_sources: [newSource]
+          });
+          
+          continue;
+        }
+
+        // Generate slug using shared utility
+        const slug = normalizeSlug(name);
 
         // Extract country
         const countryLabel = result.countryLabel?.value || 'Unknown';

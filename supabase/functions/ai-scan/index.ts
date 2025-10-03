@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeSlug } from "../_shared/normalize-slug.ts";
+import { checkForDuplicates } from "../_shared/duplicate-checker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,23 +90,33 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
     let addedCount = 0;
 
     for (const place of places) {
-      // Create slug
-      const slug = place.name
-        .toLowerCase()
-        .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
-        .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
+      // Create slug using shared utility
+      const slug = normalizeSlug(place.name);
 
-      // Check if exists
-      const { data: existing } = await supabase
-        .from("places")
-        .select("id")
-        .eq("slug", slug)
-        .maybeSingle();
+      // Comprehensive duplicate check
+      const duplicateCheck = await checkForDuplicates(supabase, {
+        name: place.name,
+        lat: place.lat || null,
+        lon: place.lon || null,
+        wikidata_id: place.wikidata_id || null,
+        osm_id: place.osm_id || null
+      });
 
-      if (existing) {
-        console.log(`Place already exists: ${place.name}`);
+      if (duplicateCheck.isDuplicate && duplicateCheck.existingPlaceId) {
+        console.log(`Duplicate found: ${place.name} - ${duplicateCheck.reason}`);
+        
+        // Merge sources into existing place
+        const newSource = {
+          url: place.source || 'AI generated',
+          type: 'ai',
+          domain: place.source ? new URL(place.source).hostname : 'ai.gateway.lovable.dev'
+        };
+        
+        await supabase.rpc('merge_place_sources', {
+          target_place_id: duplicateCheck.existingPlaceId,
+          new_sources: [newSource]
+        });
+        
         continue;
       }
 
