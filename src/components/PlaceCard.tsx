@@ -1,9 +1,13 @@
 import { Place } from '@/types';
-import { MapPin, CheckCircle2, Bot, ExternalLink } from 'lucide-react';
+import { MapPin, CheckCircle2, Bot, ExternalLink, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, Language } from '@/lib/i18n';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +34,31 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
+  };
+  const { isAdmin } = useAuth();
+
+  const handleStatusChange = async (
+    id: string,
+    status: 'pending' | 'approved' | 'rejected'
+  ) => {
+    const { error } = await supabase.from('places').update({ status }).eq('id', id);
+    if (error) {
+      toast.error('Güncelleme hatası');
+    } else {
+      toast.success('Durum güncellendi');
+      window.location.reload();
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu yeri silmek istediğinizden emin misiniz?')) return;
+    const { error } = await supabase.from('places').delete().eq('id', id);
+    if (error) {
+      toast.error('Silme hatası: ' + error.message);
+    } else {
+      toast.success('Yer silindi');
+      window.location.reload();
+    }
   };
 
   return (
@@ -136,6 +165,32 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
           {t('place.detail')}
         </Button>
       </div>
+
+      {isAdmin && (
+        <div className="mt-3 flex items-center gap-2">
+          <Select
+            value={place.status}
+            onValueChange={(val) => handleStatusChange(place.id, val as any)}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Durum" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Bekliyor</SelectItem>
+              <SelectItem value="approved">Onaylı</SelectItem>
+              <SelectItem value="rejected">Reddedildi</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            size="icon"
+            variant="destructive"
+            onClick={() => handleDelete(place.id)}
+            aria-label="Sil"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

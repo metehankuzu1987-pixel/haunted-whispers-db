@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Place, Comment } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +20,7 @@ import {
   MessageSquare,
   AlertCircle,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -34,6 +35,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { useAuth } from '@/hooks/useAuth';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const PlaceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +53,35 @@ const PlaceDetail = () => {
   // Yorum formu
   const [commentForm, setCommentForm] = useState({ nickname: '', message: '' });
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+
+  const navigate = useNavigate();
+  const { isAdmin } = useAuth();
+
+  const handleAdminStatusChange = async (status: 'pending' | 'approved' | 'rejected') => {
+    if (!place) return;
+    const { error } = await supabase
+      .from('places')
+      .update({ status })
+      .eq('id', place.id);
+    if (error) {
+      toast({ title: 'Güncelleme hatası', variant: 'destructive' });
+    } else {
+      toast({ title: 'Durum güncellendi' });
+      fetchData();
+    }
+  };
+
+  const handleAdminDelete = async () => {
+    if (!place) return;
+    if (!confirm('Bu yeri silmek istediğinizden emin misiniz?')) return;
+    const { error } = await supabase.from('places').delete().eq('id', place.id);
+    if (error) {
+      toast({ title: 'Silme hatası', variant: 'destructive' });
+    } else {
+      toast({ title: 'Yer silindi' });
+      navigate('/');
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -237,6 +269,24 @@ const PlaceDetail = () => {
               </TooltipProvider>
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="flex items-center gap-2 mt-4">
+              <Select value={place.status} onValueChange={(val) => handleAdminStatusChange(val as any)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Durum" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Bekliyor</SelectItem>
+                  <SelectItem value="approved">Onaylı</SelectItem>
+                  <SelectItem value="rejected">Reddedildi</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="destructive" onClick={handleAdminDelete}>
+                <Trash2 className="w-4 h-4 mr-2" /> Sil
+              </Button>
+            </div>
+          )}
 
           {/* Koordinatlar */}
           {(place.lat || place.lon) && (

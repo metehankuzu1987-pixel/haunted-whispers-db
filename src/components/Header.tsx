@@ -70,6 +70,18 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
               </Button>
             )}
 
+            {/* Admin Kısayol */}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => navigate('/admin')}
+                className="hover-glow hidden sm:inline-flex"
+              >
+                <ShieldCheck className="w-4 h-4 mr-2" />
+                Admin Panel
+              </Button>
+            )}
+
             {/* Dil Seçici */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
