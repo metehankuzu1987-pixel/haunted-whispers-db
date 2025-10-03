@@ -89,12 +89,12 @@ export const Filters = ({ lang, filters, onFiltersChange, countries, categories 
             {/* Ülke */}
             <div className="space-y-2">
               <Label htmlFor="country">{t('filters.country')}</Label>
-              <Select value={filters.country} onValueChange={(v) => handleChange('country', v)}>
+              <Select value={filters.country || "all"} onValueChange={(v) => handleChange('country', v === "all" ? "" : v)}>
                 <SelectTrigger id="country">
                   <SelectValue placeholder={t('filters.country')} />
                 </SelectTrigger>
                 <SelectContent className="glass z-50 max-h-[300px]">
-                  <SelectItem value="">Tümü</SelectItem>
+                  <SelectItem value="all">Tümü</SelectItem>
                   {countries.map((c) => (
                     <SelectItem key={c.code} value={c.code}>
                       {c.name} ({c.code})
@@ -119,12 +119,12 @@ export const Filters = ({ lang, filters, onFiltersChange, countries, categories 
             {/* Kategori */}
             <div className="space-y-2">
               <Label htmlFor="category">{t('filters.category')}</Label>
-              <Select value={filters.category} onValueChange={(v) => handleChange('category', v)}>
+              <Select value={filters.category || "all"} onValueChange={(v) => handleChange('category', v === "all" ? "" : v)}>
                 <SelectTrigger id="category">
                   <SelectValue placeholder={t('filters.category')} />
                 </SelectTrigger>
                 <SelectContent className="glass z-50">
-                  <SelectItem value="">Tümü</SelectItem>
+                  <SelectItem value="all">Tümü</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
