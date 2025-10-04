@@ -232,8 +232,8 @@ const PlaceDetail = () => {
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!place || !user) {
-      toast({ title: 'Yorum yapmak için giriş yapmalısınız', variant: 'destructive' });
+    if (!place) {
+      toast({ title: 'Bir hata oluştu', variant: 'destructive' });
       return;
     }
 
@@ -255,7 +255,7 @@ const PlaceDetail = () => {
         .from('comments')
         .insert({
           place_id: place.id,
-          user_id: user.id,
+          user_id: user?.id || null,
           nickname: sanitizedNickname,
           message: sanitizedMessage,
         })
@@ -591,45 +591,34 @@ const PlaceDetail = () => {
             </h3>
 
             {/* Yorum Ekleme Formu */}
-            {user ? (
-              <form onSubmit={handleCommentSubmit} className="mb-6 space-y-3">
-                <Input
-                  placeholder={t('comments.nickname')}
-                  value={commentForm.nickname}
-                  onChange={(e) => setCommentForm({ ...commentForm, nickname: e.target.value })}
-                  maxLength={50}
-                  required
-                />
-                <Textarea
-                  placeholder={t('comments.message')}
-                  value={commentForm.message}
-                  onChange={(e) => setCommentForm({ ...commentForm, message: e.target.value })}
-                  maxLength={500}
-                  rows={3}
-                  required
-                />
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">
-                    {commentForm.message.length}/500
-                  </span>
-                  <Button type="submit" disabled={commentSubmitting} className="hover-glow">
-                    {commentSubmitting ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : null}
-                    {t('comments.submit')}
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="mb-6 p-4 glass rounded-lg text-center">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Yorum yapmak için giriş yapmalısınız
-                </p>
-                <Button onClick={() => navigate('/auth')} variant="outline">
-                  Giriş Yap
+            <form onSubmit={handleCommentSubmit} className="mb-6 space-y-3">
+              <Input
+                placeholder={t('comments.nickname')}
+                value={commentForm.nickname}
+                onChange={(e) => setCommentForm({ ...commentForm, nickname: e.target.value })}
+                maxLength={50}
+                required
+              />
+              <Textarea
+                placeholder={t('comments.message')}
+                value={commentForm.message}
+                onChange={(e) => setCommentForm({ ...commentForm, message: e.target.value })}
+                maxLength={500}
+                rows={3}
+                required
+              />
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">
+                  {commentForm.message.length}/500
+                </span>
+                <Button type="submit" disabled={commentSubmitting} className="hover-glow">
+                  {commentSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : null}
+                  {t('comments.submit')}
                 </Button>
               </div>
-            )}
+            </form>
 
             {/* Yorum Listesi */}
             <div className="space-y-3">
