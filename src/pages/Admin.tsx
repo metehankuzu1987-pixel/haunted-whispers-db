@@ -12,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { HeroMediaUpload } from '@/components/HeroMediaUpload';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn, AlertTriangle, RefreshCw, XCircle, BarChart3 } from 'lucide-react';
-import type { Place } from '@/types';
+import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn, AlertTriangle, RefreshCw, XCircle, BarChart3, MessageSquare } from 'lucide-react';
+import type { Place, Comment } from '@/types';
 import { placeSchema } from '@/lib/validation';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 
@@ -48,6 +48,8 @@ export default function Admin() {
   const [currentIP, setCurrentIP] = useState<string>('');
   const [ignoredIPs, setIgnoredIPs] = useState<string[]>([]);
   const [newIP, setNewIP] = useState('');
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentCount, setCommentCount] = useState(0);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -73,6 +75,7 @@ export default function Admin() {
       fetchSecurityLogs();
       fetchCurrentIP();
       fetchIgnoredIPs();
+      fetchComments();
     }
   }, [isAdmin]);
 
@@ -124,6 +127,40 @@ export default function Admin() {
           const ips = JSON.parse(newValue);
           setIgnoredIPs(ips);
         }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin]);
+
+  // Real-time comments monitoring
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const channel = supabase
+      .channel('comments-realtime')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'comments'
+      }, async (payload) => {
+        const newComment = payload.new as Comment;
+        
+        // Fetch place name for notification
+        const { data: place } = await supabase
+          .from('places')
+          .select('name')
+          .eq('id', newComment.place_id)
+          .single();
+        
+        // Add to comments list
+        setComments(prev => [newComment, ...prev]);
+        setCommentCount(prev => prev + 1);
+        
+        // Show toast notification
+        toast.success(`🆕 Yeni yorum: ${newComment.nickname} - ${place?.name || 'Bilinmeyen yer'}`);
       })
       .subscribe();
 
@@ -254,6 +291,47 @@ export default function Admin() {
       }
     } catch (error) {
       console.error('Failed to fetch ignored IPs:', error);
+    }
+  };
+
+  const fetchComments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .select(`
+          *,
+          places:place_id (
+            name,
+            slug
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      setComments((data || []) as any);
+      setCommentCount((data || []).length);
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm('Bu yorumu silmek istediğinizden emin misiniz?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      setCommentCount(prev => prev - 1);
+      toast.success('Yorum silindi');
+    } catch (error: any) {
+      toast.error('Yorum silinemedi: ' + error.message);
     }
   };
 
@@ -716,12 +794,21 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-9">
+          <TabsList className="grid w-full grid-cols-10">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
             <TabsTrigger value="apis">Gelişmiş API</TabsTrigger>
             <TabsTrigger value="duplicates">Duplikatlar</TabsTrigger>
+            <TabsTrigger value="comments" className="relative">
+              <MessageSquare className="w-4 h-4 mr-1" />
+              Yorumlar
+              {commentCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-primary text-white text-xs rounded-full flex items-center justify-center">
+                  {commentCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="analytics">
               <BarChart3 className="w-4 h-4 mr-1" />
               Analytics
@@ -1522,6 +1609,79 @@ export default function Admin() {
               </CardContent>
             </Card>
             </div>
+          </TabsContent>
+
+          {/* Comments Tab */}
+          <TabsContent value="comments" className="space-y-4">
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5" />
+                  Yorumlar ({commentCount})
+                </CardTitle>
+                <CardDescription>
+                  Kullanıcıların yerler hakkında yazdığı yorumları görüntüleyin ve yönetin
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {comments.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>Henüz yorum yok</p>
+                  </div>
+                ) : (
+                  comments.map((comment: any) => (
+                    <div
+                      key={comment.id}
+                      className="glass p-4 rounded-lg border border-border/50 hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex justify-between items-start gap-4 mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold">👤 {comment.nickname}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(comment.created_at).toLocaleDateString('tr-TR', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          
+                          {comment.places && (
+                            <div className="mb-2">
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="h-auto p-0 text-primary hover:underline"
+                                onClick={() => navigate(`/place/${comment.place_id}`)}
+                              >
+                                📍 {comment.places.name}
+                              </Button>
+                            </div>
+                          )}
+                          
+                          <p className="text-sm text-foreground mt-2">
+                            💬 {comment.message}
+                          </p>
+                        </div>
+                        
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteComment(comment.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Analytics Tab */}
