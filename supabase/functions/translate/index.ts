@@ -49,6 +49,9 @@ async function translateWithLovableAI(texts: string[], apiKey: string, sourceLan
       } catch (e) {
         console.error("Failed to parse extracted JSON array:", e);
       }
+    } else if (texts.length === 1) {
+      // Fallback for single text: use content directly if JSON parsing failed
+      translations = [content.trim()];
     }
   }
   
@@ -97,6 +100,9 @@ async function translateWithOpenAI(texts: string[], apiKey: string, model: strin
       } catch (e) {
         console.error("Failed to parse extracted JSON array:", e);
       }
+    } else if (texts.length === 1) {
+      // Fallback for single text: use content directly if JSON parsing failed
+      translations = [content.trim()];
     }
   }
   

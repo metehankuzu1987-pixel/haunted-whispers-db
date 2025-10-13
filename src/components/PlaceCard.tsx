@@ -15,6 +15,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useTranslateContent } from '@/hooks/useTranslateContent';
+import { detectLang } from '@/lib/langDetect';
+import { getCategoryLabel } from '@/lib/categoryTranslations';
 
 interface PlaceCardProps {
   place: Place;
@@ -38,11 +40,18 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
   };
   const { isAdmin } = useAuth();
 
-  // Content translation for EN
-  const textsToTranslate = lang === 'en' ? [place.name, place.description || ''] : [];
-  const { translations: tr } = useTranslateContent(textsToTranslate, 'tr', 'en');
-  const displayedName = lang === 'en' && tr[0] ? tr[0] : place.name;
-  const displayedDescription = lang === 'en' && tr[1] ? tr[1] : (place.description || '');
+  // Bidirectional translation: detect source language from content
+  const sampleText = place.description || place.name;
+  const sourceLang = detectLang(sampleText);
+  const targetLang = lang;
+  
+  const shouldTranslate = sourceLang !== targetLang;
+  const textsToTranslate = shouldTranslate ? [place.name, place.description || ''] : [];
+  const { translations: tr } = useTranslateContent(textsToTranslate, sourceLang, targetLang);
+  
+  const displayedName = shouldTranslate && tr[0] ? tr[0] : place.name;
+  const displayedDescription = shouldTranslate && tr[1] ? tr[1] : (place.description || '');
+  const displayedCategory = getCategoryLabel(place.category, lang);
 
   const handleStatusChange = async (
     id: string,
@@ -121,7 +130,7 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
       {/* Kategori & Puan */}
       <div className="flex items-center gap-2 mb-3">
         <Badge variant="outline" className="text-xs">
-          {place.category}
+          {displayedCategory}
         </Badge>
         <TooltipProvider>
           <Tooltip>

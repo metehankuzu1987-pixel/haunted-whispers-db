@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-const CACHE_KEY = 'translationCache_v1';
+const CACHE_KEY = 'translationCache_v2';
 const TTL_MS = 1 * 24 * 60 * 60 * 1000; // 1 day (for localStorage cache only)
 
 type CacheMap = Record<string, { translation: string; timestamp: number }>;
@@ -114,23 +114,42 @@ export function useTranslateContent(texts: string[] | undefined, from: string, t
 
         const received: string[] = (data?.translations as string[]) || [];
         
-        // Save new translations to both database and cache
-        const newDbTranslations = stillMissing.map((m, idx) => ({
-          source_text: m.text,
-          source_lang: from,
-          target_lang: to,
-          translated_text: received[idx] || m.text
-        }));
-
-        // Insert into database (ignore duplicates)
-        await supabase
-          .from('translations')
-          .upsert(newDbTranslations, { onConflict: 'source_text,source_lang,target_lang' });
+        // Quality control: only save if received length matches and translations are valid
+        const shouldSaveToDb = received.length === stillMissing.length;
+        const validDbTranslations: any[] = [];
+        const validCacheEntries: Array<{ text: string; translation: string }> = [];
 
         stillMissing.forEach((m, idx) => {
           const translated = received[idx] ?? '';
           result[m.index] = translated;
-          cache[keyFor(m.text, from, to)] = { translation: translated, timestamp: now };
+          
+          // Quality check: Don't save likely failed translations
+          const isLikelyFailed = 
+            from !== to && 
+            m.text.length > 40 && 
+            translated === m.text;
+          
+          if (!isLikelyFailed && shouldSaveToDb) {
+            validDbTranslations.push({
+              source_text: m.text,
+              source_lang: from,
+              target_lang: to,
+              translated_text: translated
+            });
+            validCacheEntries.push({ text: m.text, translation: translated });
+          }
+        });
+
+        // Insert valid translations into database
+        if (validDbTranslations.length > 0) {
+          await supabase
+            .from('translations')
+            .upsert(validDbTranslations, { onConflict: 'source_text,source_lang,target_lang' });
+        }
+
+        // Update cache only with valid translations
+        validCacheEntries.forEach(({ text, translation }) => {
+          cache[keyFor(text, from, to)] = { translation, timestamp: now };
         });
 
         writeCache(cache);

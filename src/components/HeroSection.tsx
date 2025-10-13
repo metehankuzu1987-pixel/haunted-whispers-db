@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Language } from '@/lib/i18n';
 import { useTranslateContent } from '@/hooks/useTranslateContent';
+import { detectLang } from '@/lib/langDetect';
 
 interface HeroSettings {
   hero_media_url: string | null;
@@ -22,12 +23,17 @@ export const HeroSection = ({ lang = 'tr' }: HeroSectionProps) => {
     hero_subtitle: 'Dünyanın lanetli ve perili yerlerini keşfedin',
   });
 
-  // Translate hero content if lang is 'en'
-  const textsToTranslate = lang === 'en' ? [settings.hero_title, settings.hero_subtitle] : [];
-  const { translations } = useTranslateContent(textsToTranslate, 'tr', 'en');
+  // Bidirectional translation for hero content
+  const sampleText = settings.hero_title || settings.hero_subtitle;
+  const sourceLang = detectLang(sampleText);
+  const targetLang = lang;
   
-  const displayedTitle = lang === 'en' && translations.length > 0 ? translations[0] : settings.hero_title;
-  const displayedSubtitle = lang === 'en' && translations.length > 1 ? translations[1] : settings.hero_subtitle;
+  const shouldTranslate = sourceLang !== targetLang;
+  const textsToTranslate = shouldTranslate ? [settings.hero_title, settings.hero_subtitle] : [];
+  const { translations } = useTranslateContent(textsToTranslate, sourceLang, targetLang);
+  
+  const displayedTitle = shouldTranslate && translations.length > 0 ? translations[0] : settings.hero_title;
+  const displayedSubtitle = shouldTranslate && translations.length > 1 ? translations[1] : settings.hero_subtitle;
 
   useEffect(() => {
     const fetchSettings = async () => {

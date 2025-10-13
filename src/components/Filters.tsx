@@ -13,7 +13,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Slider } from '@/components/ui/slider';
 import { useTranslation, Language } from '@/lib/i18n';
-import { useTranslateContent } from '@/hooks/useTranslateContent';
+import { getCategoryLabel } from '@/lib/categoryTranslations';
 
 export interface FilterState {
   country: string;
@@ -40,9 +40,6 @@ export const Filters = ({ lang, filters, onFiltersChange, countries, categories 
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  // Translate category labels in EN, keep values in TR for filtering
-  const needsEn = lang === 'en';
-  const { translations: translatedCategories } = useTranslateContent(needsEn ? categories : [], 'tr', 'en');
 
   const clearFilters = () => {
     onFiltersChange({
@@ -132,7 +129,7 @@ export const Filters = ({ lang, filters, onFiltersChange, countries, categories 
                   <SelectItem value="all">Tümü</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
-                      {cat}
+                      {getCategoryLabel(cat, lang)}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -44,6 +44,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { commentSchema, sanitizeHtml } from '@/lib/validation';
 import { useTranslateContent } from '@/hooks/useTranslateContent';
+import { detectLang } from '@/lib/langDetect';
+import { getCategoryLabel } from '@/lib/categoryTranslations';
 
 const PlaceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -70,12 +72,18 @@ const PlaceDetail = () => {
   const { isAdmin, user } = useAuth();
   const { trackPageView, trackPlaceView, trackPlaceVote, trackComment } = useAnalytics();
 
-  // Content translation for EN
-  const textsToTranslate = lang === 'en' && place ? [place.name, place.description || '', place.category] : [];
-  const { translations: trContent } = useTranslateContent(textsToTranslate, 'tr', 'en');
-  const displayedName = lang === 'en' && trContent[0] ? trContent[0] : place?.name;
-  const displayedDescription = lang === 'en' && trContent[1] ? trContent[1] : (place?.description || '');
-  const displayedCategory = lang === 'en' && trContent[2] ? trContent[2] : place?.category;
+  // Bidirectional translation: detect source language from content
+  const sampleText = place?.description || place?.name || '';
+  const sourceLang = detectLang(sampleText);
+  const targetLang = lang;
+  
+  const shouldTranslate = place && sourceLang !== targetLang;
+  const textsToTranslate = shouldTranslate ? [place.name, place.description || ''] : [];
+  const { translations: trContent } = useTranslateContent(textsToTranslate, sourceLang, targetLang);
+  
+  const displayedName = shouldTranslate && trContent[0] ? trContent[0] : place?.name;
+  const displayedDescription = shouldTranslate && trContent[1] ? trContent[1] : (place?.description || '');
+  const displayedCategory = place ? getCategoryLabel(place.category, lang) : '';
 
   // Fetch categories
   useEffect(() => {
