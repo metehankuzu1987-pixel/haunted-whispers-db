@@ -60,6 +60,9 @@ export default function Admin() {
   });
   const [scanningPaused, setScanningPaused] = useState(false);
   const [selectedAiModel, setSelectedAiModel] = useState('gpt-4o-mini');
+  const [aiProviderScan, setAiProviderScan] = useState<'lovable' | 'openai' | 'both'>('both');
+  const [aiProviderTranslate, setAiProviderTranslate] = useState<'lovable' | 'openai'>('lovable');
+  const [aiNotificationsEnabled, setAiNotificationsEnabled] = useState(true);
   const [placeStatusFilter, setPlaceStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [categories, setCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -356,7 +359,7 @@ export default function Admin() {
       const { data } = await supabase
         .from('app_settings')
         .select('setting_key, setting_value')
-        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key', 'ai_model']);
+        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key', 'ai_model', 'ai_provider_scan', 'ai_provider_translate', 'ai_notifications_enabled']);
       
       if (data) {
         const keys: any = { google_places: '', foursquare: '', geonames_username: '', openai: '' };
@@ -366,6 +369,9 @@ export default function Admin() {
           if (item.setting_key === 'geonames_username') keys.geonames_username = item.setting_value || '';
           if (item.setting_key === 'openai_api_key') keys.openai = item.setting_value || '';
           if (item.setting_key === 'ai_model') setSelectedAiModel(item.setting_value || 'gpt-4o-mini');
+          if (item.setting_key === 'ai_provider_scan') setAiProviderScan(item.setting_value as any || 'both');
+          if (item.setting_key === 'ai_provider_translate') setAiProviderTranslate(item.setting_value as any || 'lovable');
+          if (item.setting_key === 'ai_notifications_enabled') setAiNotificationsEnabled(item.setting_value === 'true');
         });
         setApiKeys(keys);
       }
@@ -731,7 +737,24 @@ export default function Admin() {
 
       if (error) throw error;
 
-      toast.success(`${scanType} taraması tamamlandı! ${data.places_added || data.addedCount || 0} yer eklendi.`);
+      // Show notifications from backend if available
+      if (data.notifications && Array.isArray(data.notifications)) {
+        for (const notification of data.notifications) {
+          toast.info(notification, { duration: 3000 });
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+
+      // Final success message
+      const providerText = data.provider_used === 'both' ? 'Lovable AI + OpenAI' : 
+                          data.provider_used === 'openai' ? 'OpenAI' : 'Lovable AI';
+      toast.success(
+        `✅ Tarama tamamlandı!\n` +
+        `Bulunan: ${data.places_found || 0}\n` +
+        `Eklenen: ${data.places_added || data.addedCount || 0}\n` +
+        `Kullanılan AI: ${providerText}`
+      );
+      
       fetchPlaces();
       fetchScanLogs();
     } catch (error: any) {
@@ -1571,32 +1594,79 @@ export default function Admin() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>AI API Ayarları</CardTitle>
+                  <CardTitle>AI Sağlayıcı Ayarları</CardTitle>
                   <CardDescription>
-                    Kendi OpenAI API anahtarınızı ve tercih edilen modeli seçin
+                    Lovable AI ve OpenAI arasında seçim yapın veya ikisini birden kullanın
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-model">AI Model Seçimi</Label>
-                    <Select value={selectedAiModel} onValueChange={saveAiModel}>
-                      <SelectTrigger id="ai-model">
-                        <SelectValue placeholder="Model seçin" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gpt-4o-mini">GPT-4o Mini (Hızlı & Ekonomik) ⚡</SelectItem>
-                        <SelectItem value="gpt-4o">GPT-4o (Dengeli) 🎯</SelectItem>
-                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Güçlü) 💪</SelectItem>
-                        <SelectItem value="o1">O1 (En Güçlü - Reasoning) 🧠</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Varsayılan: GPT-4o Mini. AI taramaları ve çeviriler için kullanılır.
-                    </p>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-base font-semibold">🤖 AI Tarama İçin:</Label>
+                      <RadioGroup value={aiProviderScan} onValueChange={(v: any) => {
+                        setAiProviderScan(v);
+                        supabase.from('app_settings').upsert({ setting_key: 'ai_provider_scan', setting_value: v, updated_at: new Date().toISOString() }, { onConflict: 'setting_key' }).then(() => toast.success('AI tarama sağlayıcısı güncellendi'));
+                      }} className="mt-2 space-y-2">
+                        <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                          <RadioGroupItem value="lovable" id="scan-lovable" />
+                          <div className="flex-1">
+                            <Label htmlFor="scan-lovable" className="cursor-pointer font-medium">
+                              Sadece Lovable AI (Ücretsiz, Aylık Limit Var)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">Hızlı ve ücretsiz, aylık kullanım limiti var</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                          <RadioGroupItem value="openai" id="scan-openai" />
+                          <div className="flex-1">
+                            <Label htmlFor="scan-openai" className="cursor-pointer font-medium">
+                              Sadece OpenAI (Ücretli, Sınırsız)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">Daha kaliteli sonuçlar, her istek ücretli</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-2 p-3 rounded-lg border border-primary/50 bg-primary/5">
+                          <RadioGroupItem value="both" id="scan-both" />
+                          <div className="flex-1">
+                            <Label htmlFor="scan-both" className="cursor-pointer font-medium">
+                              İkisini Birden Kullan (ÖNERİLEN) ⭐
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">Lovable AI önce çalışır, limit aşılırsa otomatik OpenAI'a geçer</p>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    <div>
+                      <Label className="text-base font-semibold">🌐 Çeviri İçin:</Label>
+                      <RadioGroup value={aiProviderTranslate} onValueChange={(v: any) => {
+                        setAiProviderTranslate(v);
+                        supabase.from('app_settings').upsert({ setting_key: 'ai_provider_translate', setting_value: v, updated_at: new Date().toISOString() }, { onConflict: 'setting_key' }).then(() => toast.success('Çeviri sağlayıcısı güncellendi'));
+                      }} className="mt-2 space-y-2">
+                        <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                          <RadioGroupItem value="lovable" id="translate-lovable" />
+                          <div className="flex-1">
+                            <Label htmlFor="translate-lovable" className="cursor-pointer font-medium">
+                              Lovable AI (Ücretsiz)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">Hızlı çeviri, ücretsiz</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                          <RadioGroupItem value="openai" id="translate-openai" />
+                          <div className="flex-1">
+                            <Label htmlFor="translate-openai" className="cursor-pointer font-medium">
+                              OpenAI (Ücretli)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">Daha doğal çeviri, ücretli</p>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="openai-key">OpenAI API Key (Opsiyonel)</Label>
+                    <Label htmlFor="openai-key">🔑 OpenAI API Key</Label>
                     <div className="flex gap-2">
                       <Input
                         id="openai-key"
@@ -1610,8 +1680,32 @@ export default function Admin() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Varsayılan olarak Lovable AI kullanılır. Kendi OpenAI anahtarınızı kullanmak isterseniz buraya girin.
+                      OpenAI kullanmak için API anahtarı gereklidir
                     </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-model">🎛️ OpenAI Model Seçimi</Label>
+                    <Select value={selectedAiModel} onValueChange={saveAiModel}>
+                      <SelectTrigger id="ai-model">
+                        <SelectValue placeholder="Model seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gpt-4o-mini">GPT-4o Mini (Hızlı & Ekonomik) ⚡</SelectItem>
+                        <SelectItem value="gpt-4o">GPT-4o (Dengeli) 🎯</SelectItem>
+                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Güçlü) 💪</SelectItem>
+                        <SelectItem value="o1">O1 (En Güçlü - Reasoning) 🧠</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <p className="text-sm font-medium mb-2">ℹ️ Bilgi:</p>
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      <li>• Lovable AI: Aylık ücretsiz limit, hızlı sonuçlar</li>
+                      <li>• OpenAI: Her istek ücretli, sınırsız kullanım</li>
+                      <li>• "İkisini Birden": Otomatik geçiş, kesintisiz çalışma</li>
+                    </ul>
                   </div>
                 </CardContent>
               </Card>
