@@ -33,9 +33,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { category = 'haunted_location', country = 'TR', enabledApis = [] } = await req.json();
+    const { category = 'haunted_location', country = 'TR', enabledApis = [], location, limit = 20 } = await req.json();
 
-    console.log('Multi-scan started', { category, country, enabledApis });
+    const near = resolveLocation(country, location);
+    console.log('Multi-scan started', { category, country, near, enabledApis, limit });
 
     // Fetch API keys from database
     const { data: apiSettings } = await supabase
@@ -57,7 +58,7 @@ serve(async (req) => {
     if (enabledApis.includes('dbpedia')) {
       try {
         console.log('Fetching from DBpedia...');
-        const dbpediaPlaces = await fetchFromDBpedia(category, country);
+        const dbpediaPlaces = await fetchFromDBpedia(category, country, limit);
         allPlaces.push(...dbpediaPlaces);
         console.log(`DBpedia found ${dbpediaPlaces.length} places`);
       } catch (error) {
@@ -72,7 +73,7 @@ serve(async (req) => {
       if (foursquareKey) {
         try {
           console.log('Fetching from Foursquare...');
-          const foursquarePlaces = await fetchFromFoursquare(category, country, foursquareKey);
+          const foursquarePlaces = await fetchFromFoursquare(category, near, limit, foursquareKey);
           allPlaces.push(...foursquarePlaces);
           console.log(`Foursquare found ${foursquarePlaces.length} places`);
         } catch (error) {
@@ -108,7 +109,7 @@ serve(async (req) => {
       if (geonamesUsername) {
         try {
           console.log('Fetching from GeoNames...');
-          const geonamesPlaces = await fetchFromGeoNames(category, country, geonamesUsername);
+          const geonamesPlaces = await fetchFromGeoNames(category, country, geonamesUsername, limit);
           allPlaces.push(...geonamesPlaces);
           console.log(`GeoNames found ${geonamesPlaces.length} places`);
         } catch (error) {
@@ -203,11 +204,13 @@ serve(async (req) => {
   }
 });
 
-async function fetchFromDBpedia(category: string, country: string): Promise<Place[]> {
+async function fetchFromDBpedia(category: string, country: string, limit: number): Promise<Place[]> {
+  const capped = Math.min(Math.max(limit || 20, 1), 50);
   const query = `
     PREFIX dbo: <http://dbpedia.org/ontology/>
     PREFIX dbr: <http://dbpedia.org/resource/>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>
     
     SELECT DISTINCT ?place ?label ?abstract ?lat ?long WHERE {
       ?place a dbo:Place ;
@@ -216,8 +219,8 @@ async function fetchFromDBpedia(category: string, country: string): Promise<Plac
       OPTIONAL { ?place geo:lat ?lat ; geo:long ?long . }
       FILTER (LANG(?label) = 'en')
       FILTER (LANG(?abstract) = 'en')
-      FILTER (CONTAINS(LCASE(?abstract), "haunted") || CONTAINS(LCASE(?abstract), "ghost") || CONTAINS(LCASE(?abstract), "paranormal"))
-    } LIMIT 50
+      FILTER (CONTAINS(LCASE(?abstract), "haunted") OR CONTAINS(LCASE(?abstract), "ghost") OR CONTAINS(LCASE(?abstract), "paranormal"))
+    } LIMIT ${capped}
   `;
 
   const response = await fetch('https://dbpedia.org/sparql', {
@@ -244,12 +247,13 @@ async function fetchFromDBpedia(category: string, country: string): Promise<Plac
   }));
 }
 
-async function fetchFromFoursquare(category: string, country: string, apiKey: string): Promise<Place[]> {
+async function fetchFromFoursquare(category: string, near: string, limit: number, apiKey: string): Promise<Place[]> {
   const query = category === 'haunted_location' ? 'haunted,ghost,paranormal' : category;
-  const response = await fetch(
-    `https://api.foursquare.com/v3/places/search?query=${query}&near=${country}&limit=50`,
-    { headers: { 'Authorization': apiKey, 'Accept': 'application/json' } }
-  );
+  const capped = Math.min(Math.max(limit || 20, 1), 50);
+  const url = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&near=${encodeURIComponent(near)}&limit=${capped}`;
+  const response = await fetch(url, {
+    headers: { 'Authorization': apiKey, 'Accept': 'application/json' }
+  });
 
   if (!response.ok) throw new Error(`Foursquare error: ${response.status}`);
   
@@ -258,7 +262,7 @@ async function fetchFromFoursquare(category: string, country: string, apiKey: st
     name: item.name,
     category: 'haunted_location',
     description: item.description,
-    country_code: country,
+    country_code: '',
     city: item.location?.locality,
     lat: item.geocodes?.main?.latitude,
     lon: item.geocodes?.main?.longitude,
@@ -294,9 +298,10 @@ async function fetchFromGoogle(category: string, country: string, apiKey: string
   }));
 }
 
-async function fetchFromGeoNames(category: string, country: string, username: string): Promise<Place[]> {
+async function fetchFromGeoNames(category: string, country: string, username: string, limit: number): Promise<Place[]> {
+  const capped = Math.min(Math.max(limit || 20, 1), 50);
   const response = await fetch(
-    `http://api.geonames.org/searchJSON?q=haunted&country=${country}&maxRows=50&username=${username}`
+    `http://api.geonames.org/searchJSON?q=haunted&country=${country}&maxRows=${capped}&username=${username}`
   );
 
   if (!response.ok) throw new Error(`GeoNames error: ${response.status}`);
@@ -331,6 +336,16 @@ async function fetchFromAtlasObscura(category: string, country: string): Promise
     console.log('Atlas Obscura scraping skipped:', err.message);
     return [];
   }
+}
+
+function resolveLocation(country: string, location?: string): string {
+  if (location && location.trim().length > 0) return location.trim();
+  const map: Record<string, string> = {
+    TR: 'Turkey', US: 'United States', UK: 'United Kingdom', GB: 'United Kingdom',
+    DE: 'Germany', FR: 'France', IT: 'Italy', JP: 'Japan', UA: 'Ukraine'
+  };
+  const code = (country || '').toUpperCase();
+  return map[code] || country;
 }
 
 function deduplicatePlaces(places: Place[]): Place[] {

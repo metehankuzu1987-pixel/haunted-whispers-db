@@ -29,6 +29,8 @@ const COUNTRIES = [
   { code: 'UA', name: 'Ukrayna' },
 ];
 
+const FQ_COUNTRY_EN: Record<string, string> = { TR: 'Turkey', US: 'United States', UK: 'United Kingdom', GB: 'United Kingdom', DE: 'Germany', FR: 'France', IT: 'Italy', JP: 'Japan', UA: 'Ukraine' };
+
 export default function Admin() {
   const navigate = useNavigate();
   const { isAdmin, loading: authLoading, user } = useAuth();
@@ -750,6 +752,8 @@ export default function Admin() {
         body: {
           category: 'haunted_location',
           country: 'TR',
+          location: FQ_COUNTRY_EN['TR'],
+          limit: 20,
           enabledApis: apisToUse
         }
       });
