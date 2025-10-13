@@ -67,23 +67,17 @@ serve(async (req) => {
       }
     }
 
-    // 2. Foursquare API (Requires key)
+    // 2. Foursquare API (OAuth)
     if (enabledApis.includes('foursquare')) {
-      const foursquareKey = apiKeys['foursquare_api_key'];
-      if (foursquareKey) {
-        try {
-          console.log('Fetching from Foursquare...');
-          const foursquarePlaces = await fetchFromFoursquare(category, near, limit, foursquareKey);
-          allPlaces.push(...foursquarePlaces);
-          console.log(`Foursquare found ${foursquarePlaces.length} places`);
-        } catch (error) {
-          const err = error as Error;
-          console.error('Foursquare API error details:', err);
-          errors.push(`Foursquare error: ${err.message}`);
-        }
-      } else {
-        console.error('Foursquare API key not configured');
-        errors.push('Foursquare API key not configured');
+      try {
+        console.log('Fetching from Foursquare...');
+        const foursquarePlaces = await fetchFromFoursquare(category, near, limit);
+        allPlaces.push(...foursquarePlaces);
+        console.log(`Foursquare found ${foursquarePlaces.length} places`);
+      } catch (error) {
+        const err = error as Error;
+        console.error('Foursquare API error details:', err);
+        errors.push(`Foursquare error: ${err.message}`);
       }
     }
 
@@ -249,46 +243,80 @@ async function fetchFromDBpedia(category: string, country: string, limit: number
   }));
 }
 
-async function fetchFromFoursquare(category: string, near: string, limit: number, apiKey: string): Promise<Place[]> {
-  const query = category === 'haunted_location' ? 'haunted,ghost,paranormal' : category;
-  const capped = Math.min(Math.max(limit || 20, 1), 50);
-  const url = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&near=${encodeURIComponent(near)}&limit=${capped}`;
-  
-  console.log('Foursquare request URL:', url);
-  console.log('Foursquare API key length:', apiKey?.length || 0);
-  
-  const response = await fetch(url, {
-    headers: { 
-      'Authorization': apiKey,
-      'Accept': 'application/json'
+async function fetchFromFoursquare(category: string, near: string, limit: number): Promise<Place[]> {
+  try {
+    // Get OAuth credentials from environment
+    const clientId = Deno.env.get('FOURSQUARE_CLIENT_ID');
+    const clientSecret = Deno.env.get('FOURSQUARE_CLIENT_SECRET');
+    
+    if (!clientId || !clientSecret) {
+      console.log('Foursquare credentials missing, skipping...');
+      return [];
     }
-  });
+    
+    // Request OAuth access token
+    const tokenResponse = await fetch('https://foursquare.com/oauth2/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'client_credentials'
+      })
+    });
+    
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error('Foursquare OAuth error:', errorText);
+      return [];
+    }
+    
+    const { access_token } = await tokenResponse.json();
+    console.log('Foursquare OAuth token obtained successfully');
+    
+    // Use token for API request
+    const query = category === 'haunted_location' ? 'haunted,ghost,paranormal' : category;
+    const capped = Math.min(Math.max(limit || 20, 1), 50);
+    const url = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&near=${encodeURIComponent(near)}&limit=${capped}`;
+    
+    console.log('Foursquare request URL:', url);
 
-  console.log('Foursquare response status:', response.status);
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Foursquare error response:', errorText);
-    throw new Error(`Foursquare API error: ${response.status} - ${errorText}`);
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    console.log('Foursquare response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Foursquare API error:', errorText);
+      return [];
+    }
+    
+    const data = await response.json();
+    console.log(`Foursquare found ${data.results?.length || 0} places`);
+    
+    return (data.results || []).map((item: any) => ({
+      name: item.name,
+      category: 'haunted_location',
+      description: item.description || `${item.name} in ${item.location?.locality}`,
+      country_code: item.location?.country || '',
+      city: item.location?.locality,
+      lat: item.geocodes?.main?.latitude,
+      lon: item.geocodes?.main?.longitude,
+      sources: [{
+        url: `https://foursquare.com/v/${item.fsq_id}`,
+        domain: 'foursquare.com',
+        type: 'api',
+      }],
+    }));
+  } catch (error) {
+    console.error('Foursquare fetch error:', error);
+    return [];
   }
-  
-  const data = await response.json();
-  console.log('Foursquare data received:', JSON.stringify(data).substring(0, 200));
-  
-  return (data.results || []).map((item: any) => ({
-    name: item.name,
-    category: 'haunted_location',
-    description: item.description,
-    country_code: '',
-    city: item.location?.locality,
-    lat: item.geocodes?.main?.latitude,
-    lon: item.geocodes?.main?.longitude,
-    sources: [{
-      url: `https://foursquare.com/v/${item.fsq_id}`,
-      domain: 'foursquare.com',
-      type: 'api',
-    }],
-  }));
 }
 
 async function fetchFromGoogle(category: string, country: string, apiKey: string): Promise<Place[]> {
@@ -327,8 +355,8 @@ async function fetchFromGeoNames(category: string, country: string, username: st
   
   const query = queryMap[category] || 'haunted';
   
-  // Make country filter optional - if empty, search globally
-  const countryParam = country ? `&country=${country}` : '';
+  // Always search globally (no country filter)
+  const countryParam = '';
   const url = `http://api.geonames.org/searchJSON?q=${encodeURIComponent(query)}${countryParam}&maxRows=${capped}&username=${username}`;
   
   console.log('GeoNames request URL:', url);
