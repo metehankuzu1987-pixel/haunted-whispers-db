@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_health_status: {
+        Row: {
+          consecutive_failures: number | null
+          id: string
+          last_failure_at: string | null
+          last_success_at: string | null
+          provider: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          consecutive_failures?: number | null
+          id?: string
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          provider: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          consecutive_failures?: number | null
+          id?: string
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          provider?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ai_scan_logs: {
         Row: {
           error_message: string | null
@@ -200,6 +230,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      openai_usage_logs: {
+        Row: {
+          cost_usd: number | null
+          created_at: string | null
+          function_name: string
+          id: string
+          success: boolean | null
+          tokens_used: number | null
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string | null
+          function_name: string
+          id?: string
+          success?: boolean | null
+          tokens_used?: number | null
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string | null
+          function_name?: string
+          id?: string
+          success?: boolean | null
+          tokens_used?: number | null
+        }
+        Relationships: []
       }
       page_views: {
         Row: {

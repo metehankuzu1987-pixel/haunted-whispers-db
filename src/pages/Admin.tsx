@@ -63,6 +63,18 @@ export default function Admin() {
   const [aiProviderScan, setAiProviderScan] = useState<'lovable' | 'openai' | 'both'>('both');
   const [aiProviderTranslate, setAiProviderTranslate] = useState<'lovable' | 'openai'>('lovable');
   const [aiNotificationsEnabled, setAiNotificationsEnabled] = useState(true);
+  
+  // OpenAI Usage Limits
+  const [openaiDailyLimit, setOpenaiDailyLimit] = useState('1');
+  const [openaiMaxRequests, setOpenaiMaxRequests] = useState('5');
+  const [openaiMaxCost, setOpenaiMaxCost] = useState('1.00');
+  const [todayScans, setTodayScans] = useState(0);
+  const [todayRequests, setTodayRequests] = useState(0);
+  const [todayCost, setTodayCost] = useState(0);
+  
+  // AI Health Status
+  const [lovableAIHealth, setLovableAIHealth] = useState<any>(null);
+  const [openaiHealth, setOpenaiHealth] = useState<any>(null);
   const [placeStatusFilter, setPlaceStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [categories, setCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
@@ -95,6 +107,9 @@ export default function Admin() {
       fetchApiKeys();
       fetchScanStatus();
       fetchCategories();
+      fetchOpenAILimits();
+      fetchOpenAIUsage();
+      fetchAIHealthStatus();
     }
   }, [isAdmin]);
 
@@ -377,6 +392,83 @@ export default function Admin() {
       }
     } catch (error) {
       console.error('Failed to fetch API keys:', error);
+    }
+  };
+
+  const fetchOpenAILimits = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('setting_key, setting_value')
+        .in('setting_key', ['openai_daily_limit', 'openai_max_requests_per_day', 'openai_max_cost_per_day']);
+      
+      if (data) {
+        data.forEach(item => {
+          if (item.setting_key === 'openai_daily_limit') setOpenaiDailyLimit(item.setting_value || '1');
+          if (item.setting_key === 'openai_max_requests_per_day') setOpenaiMaxRequests(item.setting_value || '5');
+          if (item.setting_key === 'openai_max_cost_per_day') setOpenaiMaxCost(item.setting_value || '1.00');
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch OpenAI limits:', error);
+    }
+  };
+
+  const fetchOpenAIUsage = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { data, count } = await supabase
+        .from('openai_usage_logs')
+        .select('cost_usd, function_name', { count: 'exact' })
+        .gte('created_at', today.toISOString());
+      
+      const scans = data?.filter(log => log.function_name === 'ai-scan').length || 0;
+      const totalCost = data?.reduce((sum, log) => sum + (log.cost_usd || 0), 0) || 0;
+      
+      setTodayScans(scans);
+      setTodayRequests(count || 0);
+      setTodayCost(totalCost);
+    } catch (error) {
+      console.error('Failed to fetch OpenAI usage:', error);
+    }
+  };
+
+  const fetchAIHealthStatus = async () => {
+    try {
+      const { data } = await supabase
+        .from('ai_health_status')
+        .select('*');
+      
+      if (data) {
+        const lovable = data.find(h => h.provider === 'lovable');
+        const openai = data.find(h => h.provider === 'openai');
+        setLovableAIHealth(lovable);
+        setOpenaiHealth(openai);
+      }
+    } catch (error) {
+      console.error('Failed to fetch AI health status:', error);
+    }
+  };
+
+  const saveOpenAILimits = async () => {
+    try {
+      const updates = [
+        { setting_key: 'openai_daily_limit', setting_value: openaiDailyLimit },
+        { setting_key: 'openai_max_requests_per_day', setting_value: openaiMaxRequests },
+        { setting_key: 'openai_max_cost_per_day', setting_value: openaiMaxCost }
+      ];
+
+      for (const update of updates) {
+        await supabase
+          .from('app_settings')
+          .upsert(update, { onConflict: 'setting_key' });
+      }
+
+      toast.success('OpenAI kullanım limitleri kaydedildi');
+    } catch (error: any) {
+      toast.error('Limitler kaydedilemedi: ' + error.message);
     }
   };
 
@@ -1706,6 +1798,70 @@ export default function Admin() {
                       <li>• OpenAI: Her istek ücretli, sınırsız kullanım</li>
                       <li>• "İkisini Birden": Otomatik geçiş, kesintisiz çalışma</li>
                     </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>⚠️ OpenAI Kullanım Limitleri</CardTitle>
+                  <CardDescription>Beklenmedik maliyetleri önlemek için günlük limitler</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label>Günlük Maksimum AI Tarama Sayısı</Label>
+                    <Input type="number" value={openaiDailyLimit} onChange={(e) => setOpenaiDailyLimit(e.target.value)} />
+                    <p className="text-xs text-muted-foreground mt-1">Lovable AI başarısız olsa bile, günde en fazla bu kadar kez OpenAI kullanılacak</p>
+                  </div>
+                  <div>
+                    <Label>Günlük Maksimum İstek Sayısı (Tarama + Çeviri)</Label>
+                    <Input type="number" value={openaiMaxRequests} onChange={(e) => setOpenaiMaxRequests(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Günlük Maksimum Maliyet ($)</Label>
+                    <Input type="number" step="0.01" value={openaiMaxCost} onChange={(e) => setOpenaiMaxCost(e.target.value)} />
+                  </div>
+                  <Button onClick={saveOpenAILimits}>Limitleri Kaydet</Button>
+                  
+                  <div className="p-4 bg-muted rounded-lg space-y-2">
+                    <p className="font-medium">📊 Bugünkü OpenAI Kullanımı</p>
+                    <div className="text-sm space-y-1">
+                      <p>Tarama: {todayScans}/{openaiDailyLimit}</p>
+                      <p>Toplam İstek: {todayRequests}/{openaiMaxRequests}</p>
+                      <p>Harcanan: ${todayCost.toFixed(4)}/${openaiMaxCost}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>🏥 AI Sağlık Durumu</CardTitle>
+                  <CardDescription>AI sağlayıcılarının anlık durumu</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="p-3 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">🔮 Lovable AI</span>
+                      <span className={`px-2 py-1 rounded text-xs ${lovableAIHealth?.status === 'healthy' ? 'bg-green-500/20 text-green-400' : lovableAIHealth?.status === 'rate_limited' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {lovableAIHealth?.status === 'healthy' ? '✅ Sağlıklı' : lovableAIHealth?.status === 'rate_limited' ? '⏳ Rate Limit' : lovableAIHealth?.status === 'no_credits' ? '💳 Kredi Bitti' : '❓ Bilinmiyor'}
+                      </span>
+                    </div>
+                    {lovableAIHealth?.last_success_at && (
+                      <p className="text-xs text-muted-foreground">Son başarılı: {new Date(lovableAIHealth.last_success_at).toLocaleString('tr-TR')}</p>
+                    )}
+                  </div>
+                  
+                  <div className="p-3 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">🤖 OpenAI</span>
+                      <span className={`px-2 py-1 rounded text-xs ${openaiHealth?.status === 'healthy' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                        {openaiHealth?.status === 'healthy' ? '✅ Sağlıklı' : '⚪ Kullanılmadı'}
+                      </span>
+                    </div>
+                    {openaiHealth?.last_success_at && (
+                      <p className="text-xs text-muted-foreground">Son başarılı: {new Date(openaiHealth.last_success_at).toLocaleString('tr-TR')}</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>

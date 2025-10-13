@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,6 +101,80 @@ async function translateWithOpenAI(texts: string[], apiKey: string, model: strin
   }
   
   return translations;
+}
+
+// Check OpenAI translation limits
+async function checkOpenAITranslateLimits(supabase: SupabaseClient) {
+  const { data: settings } = await supabase
+    .from('app_settings')
+    .select('setting_key, setting_value')
+    .in('setting_key', ['openai_max_requests_per_day', 'openai_max_cost_per_day']);
+  
+  const maxRequests = parseInt(settings?.find((s: any) => s.setting_key === 'openai_max_requests_per_day')?.setting_value || '5');
+  const maxCost = parseFloat(settings?.find((s: any) => s.setting_key === 'openai_max_cost_per_day')?.setting_value || '1.00');
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const { data: todayUsage, count } = await supabase
+    .from('openai_usage_logs')
+    .select('cost_usd', { count: 'exact' })
+    .gte('created_at', today.toISOString());
+  
+  const todayRequestCount = count || 0;
+  const todayCost = todayUsage?.reduce((sum: number, log: any) => sum + (log.cost_usd || 0), 0) || 0;
+  
+  if (todayRequestCount >= maxRequests) {
+    throw new Error(`Günlük maksimum OpenAI istek sayısına ulaşıldı (${maxRequests})`);
+  }
+  
+  if (todayCost >= maxCost) {
+    throw new Error(`Günlük OpenAI maliyet limiti aşıldı ($${todayCost.toFixed(2)}/$${maxCost.toFixed(2)})`);
+  }
+  
+  return { allowed: true, todayUsage: todayRequestCount, todayCost };
+}
+
+// Update AI health after translation
+async function updateTranslateAIHealth(supabase: SupabaseClient, provider: string, success: boolean, errorCode?: number) {
+  const { data: current } = await supabase
+    .from('ai_health_status')
+    .select('*')
+    .eq('provider', provider)
+    .maybeSingle();
+  
+  const now = new Date().toISOString();
+  
+  if (success) {
+    await supabase
+      .from('ai_health_status')
+      .upsert({
+        provider,
+        last_success_at: now,
+        consecutive_failures: 0,
+        status: 'healthy',
+        updated_at: now
+      });
+  } else {
+    const consecutiveFailures = (current?.consecutive_failures || 0) + 1;
+    let status = 'unhealthy';
+    
+    if (errorCode === 429) {
+      status = 'rate_limited';
+    } else if (errorCode === 402) {
+      status = 'no_credits';
+    }
+    
+    await supabase
+      .from('ai_health_status')
+      .upsert({
+        provider,
+        last_failure_at: now,
+        consecutive_failures: consecutiveFailures,
+        status,
+        updated_at: now
+      });
+  }
 }
 
 serve(async (req) => {

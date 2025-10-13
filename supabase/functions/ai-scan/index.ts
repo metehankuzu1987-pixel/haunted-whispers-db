@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeSlug } from "../_shared/normalize-slug.ts";
 import { checkForDuplicates } from "../_shared/duplicate-checker.ts";
 
@@ -74,6 +74,97 @@ function deduplicatePlaces(places: any[]) {
   });
 }
 
+// Check OpenAI daily limits
+async function checkOpenAILimits(supabase: SupabaseClient) {
+  const { data: settings } = await supabase
+    .from('app_settings')
+    .select('setting_key, setting_value')
+    .in('setting_key', ['openai_daily_limit', 'openai_max_requests_per_day', 'openai_max_cost_per_day']);
+  
+  const dailyLimit = parseInt(settings?.find((s: any) => s.setting_key === 'openai_daily_limit')?.setting_value || '1');
+  const maxRequests = parseInt(settings?.find((s: any) => s.setting_key === 'openai_max_requests_per_day')?.setting_value || '5');
+  const maxCost = parseFloat(settings?.find((s: any) => s.setting_key === 'openai_max_cost_per_day')?.setting_value || '1.00');
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const { data: todayUsage, count } = await supabase
+    .from('openai_usage_logs')
+    .select('cost_usd', { count: 'exact' })
+    .gte('created_at', today.toISOString())
+    .eq('function_name', 'ai-scan');
+  
+  const todayRequestCount = count || 0;
+  const todayCost = todayUsage?.reduce((sum: number, log: any) => sum + (log.cost_usd || 0), 0) || 0;
+  
+  if (todayRequestCount >= dailyLimit) {
+    throw new Error(`Günlük OpenAI tarama limiti doldu (${dailyLimit}/${dailyLimit}). Yarın tekrar deneyin.`);
+  }
+  
+  if (todayRequestCount >= maxRequests) {
+    throw new Error(`Günlük maksimum OpenAI istek sayısına ulaşıldı (${maxRequests}). Yarın tekrar deneyin.`);
+  }
+  
+  if (todayCost >= maxCost) {
+    throw new Error(`Günlük OpenAI maliyet limiti aşıldı ($${todayCost.toFixed(2)}/$${maxCost.toFixed(2)}). Yarın tekrar deneyin.`);
+  }
+  
+  return { allowed: true, todayUsage: todayRequestCount, todayCost };
+}
+
+// Get AI health status
+async function getAIHealthStatus(supabase: SupabaseClient, provider: string) {
+  const { data } = await supabase
+    .from('ai_health_status')
+    .select('*')
+    .eq('provider', provider)
+    .maybeSingle();
+  
+  return data;
+}
+
+// Update AI health after a call
+async function updateAIHealth(supabase: SupabaseClient, provider: string, success: boolean, errorCode?: number) {
+  const { data: current } = await supabase
+    .from('ai_health_status')
+    .select('*')
+    .eq('provider', provider)
+    .maybeSingle();
+  
+  const now = new Date().toISOString();
+  
+  if (success) {
+    await supabase
+      .from('ai_health_status')
+      .upsert({
+        provider,
+        last_success_at: now,
+        consecutive_failures: 0,
+        status: 'healthy',
+        updated_at: now
+      });
+  } else {
+    const consecutiveFailures = (current?.consecutive_failures || 0) + 1;
+    let status = 'unhealthy';
+    
+    if (errorCode === 429) {
+      status = 'rate_limited';
+    } else if (errorCode === 402) {
+      status = 'no_credits';
+    }
+    
+    await supabase
+      .from('ai_health_status')
+      .upsert({
+        provider,
+        last_failure_at: now,
+        consecutive_failures: consecutiveFailures,
+        status,
+        updated_at: now
+      });
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -131,67 +222,135 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
     let allPlaces: any[] = [];
     let notifications: string[] = [];
 
-    // Try Lovable AI first if enabled
-    if (provider === 'lovable' || provider === 'both') {
-      notifications.push('🔍 Lovable AI taraması başlatılıyor...');
-      
+    // Check Lovable AI health status
+    const lovableHealth = await getAIHealthStatus(supabase, 'lovable');
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const lastFailureMonth = lovableHealth?.last_failure_at ? new Date(lovableHealth.last_failure_at).getMonth() : null;
+    
+    // Lovable AI kotası yenilendi mi kontrol et
+    const shouldRetryLovable = !lovableHealth || 
+                                lovableHealth.status === 'healthy' ||
+                                (lovableHealth.status === 'rate_limited' && lastFailureMonth !== currentMonth) ||
+                                (lovableHealth.status === 'no_credits' && lastFailureMonth !== currentMonth);
+
+    // Lovable AI çağrısı
+    if ((provider === 'lovable' || provider === 'both') && shouldRetryLovable) {
+      notifications.push('🔮 Lovable AI ile tarama başlatıldı...');
       try {
         const lovablePlaces = await fetchFromLovableAI(lovableApiKey, prompt);
         allPlaces.push(...lovablePlaces);
-        notifications.push(`✅ Lovable AI: ${lovablePlaces.length} yer bulundu (Ücretsiz)`);
-        console.log(`Lovable AI found ${lovablePlaces.length} places`);
-      } catch (error: any) {
-        console.error("Lovable AI error:", error);
+        notifications.push(`✅ Lovable AI: ${lovablePlaces.length} yer bulundu`);
+        await updateAIHealth(supabase, 'lovable', true);
+      } catch (lovableError: any) {
+        console.error('Lovable AI error:', lovableError);
         
-        if (error.status === 429) {
-          notifications.push('⚠️ Lovable AI rate limit aşıldı!');
-          
-          // Fallback to OpenAI if in "both" mode
-          if (provider === 'both' && openaiKey) {
-            notifications.push('🔄 OpenAI\'a geçiliyor...');
-            try {
-              const openaiPlaces = await fetchFromOpenAI(openaiKey, aiModel, prompt);
-              allPlaces.push(...openaiPlaces);
-              notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (Fallback)`);
-              console.log(`OpenAI fallback found ${openaiPlaces.length} places`);
-            } catch (openaiError: any) {
-              notifications.push(`❌ OpenAI hatası: ${openaiError.message}`);
-              throw openaiError;
-            }
-          } else {
-            throw error;
-          }
-        } else if (error.status === 402) {
-          notifications.push('💳 Lovable AI kredisi bitti!');
-          
-          if (provider === 'both' && openaiKey) {
-            notifications.push('🔄 OpenAI\'a geçiliyor...');
+        const errorCode = lovableError.status || 500;
+        await updateAIHealth(supabase, 'lovable', false, errorCode);
+        
+        if (errorCode === 429 || errorCode === 402) {
+          const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          const renewalDate = nextMonth.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+          notifications.push(`⚠️ Lovable AI ${errorCode === 429 ? 'rate limit' : 'kredi'} sınırına ulaştı (Kota yenilenmesi: ${renewalDate})`);
+        } else {
+          notifications.push(`⚠️ Lovable AI başarısız: ${lovableError.message}`);
+        }
+        
+        // OpenAI'a geç
+        if (provider === 'both' && openaiKey && (errorCode === 429 || errorCode === 402)) {
+          notifications.push('🔄 OpenAI\'a geçiliyor...');
+          try {
+            const limitCheck = await checkOpenAILimits(supabase);
+            notifications.push(`ℹ️ OpenAI kullanımı: ${limitCheck.todayUsage + 1}/günlük limit`);
+            
             const openaiPlaces = await fetchFromOpenAI(openaiKey, aiModel, prompt);
             allPlaces.push(...openaiPlaces);
-            notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (Fallback)`);
-          } else {
-            throw error;
+            
+            const estimatedTokens = 500 * openaiPlaces.length;
+            const estimatedCost = estimatedTokens * 0.00001;
+            
+            await supabase.from('openai_usage_logs').insert({
+              function_name: 'ai-scan',
+              tokens_used: estimatedTokens,
+              cost_usd: estimatedCost,
+              success: true
+            });
+            
+            notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (~$${estimatedCost.toFixed(4)})`);
+            await updateAIHealth(supabase, 'openai', true);
+          } catch (openaiError: any) {
+            console.error('OpenAI error:', openaiError);
+            notifications.push(`❌ ${openaiError.message}`);
+            await updateAIHealth(supabase, 'openai', false);
+            throw new Error('Her iki AI sağlayıcı da başarısız oldu');
           }
-        } else {
-          throw error;
+        } else if (provider === 'lovable') {
+          throw lovableError;
+        }
+      }
+    } else if ((provider === 'lovable' || provider === 'both') && !shouldRetryLovable) {
+      // Lovable AI kota yenilenmesini bekliyor
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const renewalDate = nextMonth.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+      notifications.push(`⏳ Lovable AI kota yenilenmesini bekliyor (${renewalDate})`);
+      
+      if (provider === 'both' && openaiKey) {
+        notifications.push('🔄 OpenAI\'a geçiliyor...');
+        try {
+          const limitCheck = await checkOpenAILimits(supabase);
+          notifications.push(`ℹ️ OpenAI kullanımı: ${limitCheck.todayUsage + 1}/günlük limit`);
+          
+          const openaiPlaces = await fetchFromOpenAI(openaiKey, aiModel, prompt);
+          allPlaces.push(...openaiPlaces);
+          
+          const estimatedTokens = 500 * openaiPlaces.length;
+          const estimatedCost = estimatedTokens * 0.00001;
+          
+          await supabase.from('openai_usage_logs').insert({
+            function_name: 'ai-scan',
+            tokens_used: estimatedTokens,
+            cost_usd: estimatedCost,
+            success: true
+          });
+          
+          notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (~$${estimatedCost.toFixed(4)})`);
+          await updateAIHealth(supabase, 'openai', true);
+        } catch (openaiError: any) {
+          console.error('OpenAI error:', openaiError);
+          notifications.push(`❌ ${openaiError.message}`);
+          await updateAIHealth(supabase, 'openai', false);
+          throw openaiError;
         }
       }
     }
 
-    // Use OpenAI if it's the only provider
+    // Sadece OpenAI kullanılacaksa
     if (provider === 'openai' && openaiKey) {
-      notifications.push('🔍 OpenAI taraması başlatılıyor...');
-      
+      notifications.push('🤖 OpenAI ile tarama başlatıldı...');
       try {
+        const limitCheck = await checkOpenAILimits(supabase);
+        notifications.push(`ℹ️ OpenAI kullanımı: ${limitCheck.todayUsage + 1}/günlük limit`);
+        
         const openaiPlaces = await fetchFromOpenAI(openaiKey, aiModel, prompt);
         allPlaces.push(...openaiPlaces);
         
-        const estimatedCost = (openaiPlaces.length * 500 * 0.0001).toFixed(4);
-        notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (~$${estimatedCost})`);
-        console.log(`OpenAI found ${openaiPlaces.length} places`);
-      } catch (error: any) {
-        notifications.push(`❌ OpenAI hatası: ${error.message}`);
-        throw error;
+        const estimatedTokens = 500 * openaiPlaces.length;
+        const estimatedCost = estimatedTokens * 0.00001;
+        
+        await supabase.from('openai_usage_logs').insert({
+          function_name: 'ai-scan',
+          tokens_used: estimatedTokens,
+          cost_usd: estimatedCost,
+          success: true
+        });
+        
+        notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (~$${estimatedCost.toFixed(4)})`);
+        await updateAIHealth(supabase, 'openai', true);
+      } catch (openaiError: any) {
+        console.error('OpenAI error:', openaiError);
+        notifications.push(`❌ ${openaiError.message}`);
+        await updateAIHealth(supabase, 'openai', false);
+        throw openaiError;
       }
     }
 
