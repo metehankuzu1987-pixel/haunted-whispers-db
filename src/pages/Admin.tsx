@@ -57,6 +57,8 @@ export default function Admin() {
     openai: ''
   });
   const [scanningPaused, setScanningPaused] = useState(false);
+  const [selectedAiModel, setSelectedAiModel] = useState('gpt-4o-mini');
+  const [placeStatusFilter, setPlaceStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -349,7 +351,7 @@ export default function Admin() {
       const { data } = await supabase
         .from('app_settings')
         .select('setting_key, setting_value')
-        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key']);
+        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key', 'ai_model']);
       
       if (data) {
         const keys: any = { google_places: '', foursquare: '', geonames_username: '', openai: '' };
@@ -358,6 +360,7 @@ export default function Admin() {
           if (item.setting_key === 'foursquare_api_key') keys.foursquare = item.setting_value || '';
           if (item.setting_key === 'geonames_username') keys.geonames_username = item.setting_value || '';
           if (item.setting_key === 'openai_api_key') keys.openai = item.setting_value || '';
+          if (item.setting_key === 'ai_model') setSelectedAiModel(item.setting_value || 'gpt-4o-mini');
         });
         setApiKeys(keys);
       }
@@ -401,6 +404,23 @@ export default function Admin() {
     } else {
       toast.success('API Key kaydedildi');
       fetchApiKeys();
+    }
+  };
+
+  const saveAiModel = async (model: string) => {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ 
+        setting_key: 'ai_model',
+        setting_value: model,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+
+    if (error) {
+      toast.error('Model kaydedilemedi: ' + error.message);
+    } else {
+      setSelectedAiModel(model);
+      toast.success('AI Model kaydedildi: ' + model);
     }
   };
 
@@ -918,80 +938,288 @@ export default function Admin() {
           </TabsList>
 
           <TabsContent value="places" className="space-y-4">
-            {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length > 0 && (
-              <Card className="glass border-2 border-primary/50">
-                <CardHeader>
-                  <CardTitle>Toplu İşlemler</CardTitle>
-                  <CardDescription>
-                    {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length} bekleyen yer var
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button 
-                    onClick={bulkApprove} 
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Tüm Bekleyenleri Onayla ve Yayınla
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-            
-            {places.map((place) => (
-              <Card key={place.id} className="glass">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle>{place.name}</CardTitle>
+            <Tabs value={placeStatusFilter} onValueChange={(v) => setPlaceStatusFilter(v as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="all">
+                  Tümü ({places.length})
+                </TabsTrigger>
+                <TabsTrigger value="pending">
+                  Bekliyor ({places.filter(p => p.status === 'pending' || p.status === 'pending_high').length})
+                </TabsTrigger>
+                <TabsTrigger value="approved">
+                  Onaylı ({places.filter(p => p.status === 'approved').length})
+                </TabsTrigger>
+                <TabsTrigger value="rejected">
+                  Reddedildi ({places.filter(p => p.status === 'rejected').length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="all" className="space-y-4 mt-4">
+                {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length > 0 && (
+                  <Card className="glass border-2 border-primary/50">
+                    <CardHeader>
+                      <CardTitle>Toplu İşlemler</CardTitle>
                       <CardDescription>
-                        {place.city}, {place.country_code} • {place.category}
+                        {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length} bekleyen yer var
                       </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Select
-                        value={place.status}
-                        onValueChange={(val) => handleStatusChange(place.id, val)}
+                    </CardHeader>
+                    <CardContent>
+                      <Button 
+                        onClick={bulkApprove} 
+                        disabled={loading}
+                        className="w-full"
                       >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Bekliyor</SelectItem>
-                          <SelectItem value="approved">Onaylı</SelectItem>
-                          <SelectItem value="rejected">Reddedildi</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() => navigate(`/place/${place.id}`)}
-                      >
-                        <Eye className="w-4 h-4" />
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                        Tüm Bekleyenleri Onayla ve Yayınla
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        onClick={() => handleDelete(place.id)}
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {places.map((place) => (
+                  <Card key={place.id} className="glass">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{place.name}</CardTitle>
+                          <CardDescription>
+                            {place.city}, {place.country_code} • {place.category}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Select
+                            value={place.status}
+                            onValueChange={(val) => handleStatusChange(place.id, val)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Bekliyor</SelectItem>
+                              <SelectItem value="approved">Onaylı</SelectItem>
+                              <SelectItem value="rejected">Reddedildi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => navigate(`/place/${place.id}`)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            onClick={() => handleDelete(place.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {place.description}
+                      </p>
+                      <div className="mt-2 flex gap-2 text-xs">
+                        <span className="badge">Skor: {place.evidence_score}</span>
+                        {place.ai_collected === 1 && <span className="badge">AI</span>}
+                        {place.human_approved === 1 && <span className="badge">İnsan Onaylı</span>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
+
+              <TabsContent value="pending" className="space-y-4 mt-4">
+                {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length > 0 && (
+                  <Card className="glass border-2 border-primary/50">
+                    <CardHeader>
+                      <CardTitle>Toplu İşlemler</CardTitle>
+                      <CardDescription>
+                        {places.filter(p => p.status === 'pending' || p.status === 'pending_high').length} bekleyen yer var
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button 
+                        onClick={bulkApprove} 
+                        disabled={loading}
+                        className="w-full"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                        Tüm Bekleyenleri Onayla ve Yayınla
                       </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {place.description}
-                  </p>
-                  <div className="mt-2 flex gap-2 text-xs">
-                    <span className="badge">Skor: {place.evidence_score}</span>
-                    {place.ai_collected === 1 && <span className="badge">AI</span>}
-                    {place.human_approved === 1 && <span className="badge">İnsan Onaylı</span>}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {places.filter(p => p.status === 'pending' || p.status === 'pending_high').map((place) => (
+                  <Card key={place.id} className="glass">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{place.name}</CardTitle>
+                          <CardDescription>
+                            {place.city}, {place.country_code} • {place.category}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Select
+                            value={place.status}
+                            onValueChange={(val) => handleStatusChange(place.id, val)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Bekliyor</SelectItem>
+                              <SelectItem value="approved">Onaylı</SelectItem>
+                              <SelectItem value="rejected">Reddedildi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => navigate(`/place/${place.id}`)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            onClick={() => handleDelete(place.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {place.description}
+                      </p>
+                      <div className="mt-2 flex gap-2 text-xs">
+                        <span className="badge">Skor: {place.evidence_score}</span>
+                        {place.ai_collected === 1 && <span className="badge">AI</span>}
+                        {place.human_approved === 1 && <span className="badge">İnsan Onaylı</span>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
+
+              <TabsContent value="approved" className="space-y-4 mt-4">
+                {places.filter(p => p.status === 'approved').map((place) => (
+                  <Card key={place.id} className="glass">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{place.name}</CardTitle>
+                          <CardDescription>
+                            {place.city}, {place.country_code} • {place.category}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Select
+                            value={place.status}
+                            onValueChange={(val) => handleStatusChange(place.id, val)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Bekliyor</SelectItem>
+                              <SelectItem value="approved">Onaylı</SelectItem>
+                              <SelectItem value="rejected">Reddedildi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => navigate(`/place/${place.id}`)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            onClick={() => handleDelete(place.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {place.description}
+                      </p>
+                      <div className="mt-2 flex gap-2 text-xs">
+                        <span className="badge">Skor: {place.evidence_score}</span>
+                        {place.ai_collected === 1 && <span className="badge">AI</span>}
+                        {place.human_approved === 1 && <span className="badge">İnsan Onaylı</span>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
+
+              <TabsContent value="rejected" className="space-y-4 mt-4">
+                {places.filter(p => p.status === 'rejected').map((place) => (
+                  <Card key={place.id} className="glass">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>{place.name}</CardTitle>
+                          <CardDescription>
+                            {place.city}, {place.country_code} • {place.category}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Select
+                            value={place.status}
+                            onValueChange={(val) => handleStatusChange(place.id, val)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Bekliyor</SelectItem>
+                              <SelectItem value="approved">Onaylı</SelectItem>
+                              <SelectItem value="rejected">Reddedildi</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => navigate(`/place/${place.id}`)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            onClick={() => handleDelete(place.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {place.description}
+                      </p>
+                      <div className="mt-2 flex gap-2 text-xs">
+                        <span className="badge">Skor: {place.evidence_score}</span>
+                        {place.ai_collected === 1 && <span className="badge">AI</span>}
+                        {place.human_approved === 1 && <span className="badge">İnsan Onaylı</span>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="add">
@@ -1270,10 +1498,28 @@ export default function Admin() {
                 <CardHeader>
                   <CardTitle>AI API Ayarları</CardTitle>
                   <CardDescription>
-                    Kendi OpenAI API anahtarınızı kullanmak için
+                    Kendi OpenAI API anahtarınızı ve tercih edilen modeli seçin
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-model">AI Model Seçimi</Label>
+                    <Select value={selectedAiModel} onValueChange={saveAiModel}>
+                      <SelectTrigger id="ai-model">
+                        <SelectValue placeholder="Model seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gpt-4o-mini">GPT-4o Mini (Hızlı & Ekonomik) ⚡</SelectItem>
+                        <SelectItem value="gpt-4o">GPT-4o (Dengeli) 🎯</SelectItem>
+                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Güçlü) 💪</SelectItem>
+                        <SelectItem value="o1">O1 (En Güçlü - Reasoning) 🧠</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Varsayılan: GPT-4o Mini. AI taramaları ve çeviriler için kullanılır.
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="openai-key">OpenAI API Key (Opsiyonel)</Label>
                     <div className="flex gap-2">
