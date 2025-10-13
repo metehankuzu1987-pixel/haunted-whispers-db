@@ -245,11 +245,11 @@ async function fetchFromDBpedia(category: string, country: string, limit: number
 
 async function fetchFromFoursquare(category: string, near: string, limit: number): Promise<Place[]> {
   try {
-    // Get API key directly from environment (fsq3... format)
+    // Get API key directly from environment
     const apiKey = Deno.env.get('FOURSQUARE_API_KEY');
     
-    if (!apiKey || !apiKey.startsWith('fsq3')) {
-      console.log('Foursquare API key missing or invalid format (must start with fsq3), skipping...');
+    if (!apiKey) {
+      console.log('Foursquare API key missing, skipping...');
       return [];
     }
     
