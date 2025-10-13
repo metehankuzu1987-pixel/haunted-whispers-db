@@ -245,36 +245,14 @@ async function fetchFromDBpedia(category: string, country: string, limit: number
 
 async function fetchFromFoursquare(category: string, near: string, limit: number): Promise<Place[]> {
   try {
-    // Get OAuth credentials from environment
-    const clientId = Deno.env.get('FOURSQUARE_CLIENT_ID');
-    const clientSecret = Deno.env.get('FOURSQUARE_CLIENT_SECRET');
+    // Get API key directly from environment (fsq3... format)
+    const apiKey = Deno.env.get('FOURSQUARE_API_KEY');
     
-    if (!clientId || !clientSecret) {
-      console.log('Foursquare credentials missing, skipping...');
+    if (!apiKey || !apiKey.startsWith('fsq3')) {
+      console.log('Foursquare API key missing or invalid format (must start with fsq3), skipping...');
       return [];
     }
     
-    // Request OAuth access token
-    const tokenResponse = await fetch('https://foursquare.com/oauth2/access_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'client_credentials'
-      })
-    });
-    
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('Foursquare OAuth error:', errorText);
-      return [];
-    }
-    
-    const { access_token } = await tokenResponse.json();
-    console.log('Foursquare OAuth token obtained successfully');
-    
-    // Use token for API request
     const query = category === 'haunted_location' ? 'haunted,ghost,paranormal' : category;
     const capped = Math.min(Math.max(limit || 20, 1), 50);
     const url = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&near=${encodeURIComponent(near)}&limit=${capped}`;
@@ -282,9 +260,10 @@ async function fetchFromFoursquare(category: string, near: string, limit: number
     console.log('Foursquare request URL:', url);
 
     const response = await fetch(url, {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Authorization': apiKey  // Direct API key, no Bearer prefix
       }
     });
 
@@ -292,7 +271,7 @@ async function fetchFromFoursquare(category: string, near: string, limit: number
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Foursquare API error:', errorText);
+      console.error('Foursquare API error:', response.status, errorText);
       return [];
     }
     
@@ -302,9 +281,9 @@ async function fetchFromFoursquare(category: string, near: string, limit: number
     return (data.results || []).map((item: any) => ({
       name: item.name,
       category: 'haunted_location',
-      description: item.description || `${item.name} in ${item.location?.locality}`,
+      description: item.description || `${item.name} in ${item.location?.locality || item.location?.region || ''}`,
       country_code: item.location?.country || '',
-      city: item.location?.locality,
+      city: item.location?.locality || item.location?.region || '',
       lat: item.geocodes?.main?.latitude,
       lon: item.geocodes?.main?.longitude,
       sources: [{
