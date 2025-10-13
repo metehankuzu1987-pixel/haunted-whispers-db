@@ -37,6 +37,19 @@ serve(async (req) => {
 
     console.log('Multi-scan started', { category, country, enabledApis });
 
+    // Fetch API keys from database
+    const { data: apiSettings } = await supabase
+      .from('app_settings')
+      .select('setting_key, setting_value')
+      .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username']);
+    
+    const apiKeys: Record<string, string> = {};
+    if (apiSettings) {
+      apiSettings.forEach(setting => {
+        apiKeys[setting.setting_key] = setting.setting_value || '';
+      });
+    }
+
     const allPlaces: Place[] = [];
     const errors: string[] = [];
 
@@ -55,7 +68,7 @@ serve(async (req) => {
 
     // 2. Foursquare API (Requires key)
     if (enabledApis.includes('foursquare')) {
-      const foursquareKey = Deno.env.get('FOURSQUARE_API_KEY');
+      const foursquareKey = apiKeys['foursquare_api_key'];
       if (foursquareKey) {
         try {
           console.log('Fetching from Foursquare...');
@@ -73,7 +86,7 @@ serve(async (req) => {
 
     // 3. Google Places API (Requires key)
     if (enabledApis.includes('google')) {
-      const googleKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
+      const googleKey = apiKeys['google_places_api_key'];
       if (googleKey) {
         try {
           console.log('Fetching from Google Places...');
@@ -91,7 +104,7 @@ serve(async (req) => {
 
     // 4. GeoNames API (Requires username)
     if (enabledApis.includes('geonames')) {
-      const geonamesUsername = Deno.env.get('GEONAMES_USERNAME');
+      const geonamesUsername = apiKeys['geonames_username'];
       if (geonamesUsername) {
         try {
           console.log('Fetching from GeoNames...');

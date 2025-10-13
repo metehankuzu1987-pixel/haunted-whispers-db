@@ -33,7 +33,10 @@ export function useTranslateContent(texts: string[] | undefined, from: string, t
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const cleanTexts = useMemo(() => (Array.isArray(texts) ? texts.map((t) => t ?? '').map(String) : []), [texts]);
+  const cleanTexts = useMemo(() => {
+    if (!Array.isArray(texts)) return [];
+    return texts.map((t) => t ?? '').map(String);
+  }, [JSON.stringify(texts)]);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +148,8 @@ export function useTranslateContent(texts: string[] | undefined, from: string, t
     return () => {
       cancelled = true;
     };
-  }, [cleanTexts, from, to]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(cleanTexts), from, to]);
 
   return { translations, loading, error };
 }

@@ -122,6 +122,7 @@ const Index = () => {
 
   useEffect(() => {
     fetchPlaces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   useEffect(() => {
