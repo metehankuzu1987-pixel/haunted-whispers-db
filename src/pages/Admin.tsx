@@ -17,7 +17,7 @@ import type { Place, Comment } from '@/types';
 import { placeSchema } from '@/lib/validation';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 
-const CATEGORIES = ['Terk edilmiş', 'Hastane', 'Orman', 'Şato', 'Kilise', 'Köprü', 'Otel', 'Diğer'];
+
 const COUNTRIES = [
   { code: 'TR', name: 'Türkiye' },
   { code: 'US', name: 'ABD' },
@@ -59,6 +59,8 @@ export default function Admin() {
   const [scanningPaused, setScanningPaused] = useState(false);
   const [selectedAiModel, setSelectedAiModel] = useState('gpt-4o-mini');
   const [placeStatusFilter, setPlaceStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -87,6 +89,7 @@ export default function Admin() {
       fetchComments();
       fetchApiKeys();
       fetchScanStatus();
+      fetchCategories();
     }
   }, [isAdmin]);
 
@@ -440,6 +443,74 @@ export default function Admin() {
     } else {
       setScanningPaused(newStatus);
       toast.success(newStatus ? '🛑 Tüm taramalar durduruldu' : '▶️ Taramalar aktif');
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_key', 'categories')
+        .single();
+      
+      if (data?.setting_value) {
+        const cats = JSON.parse(data.setting_value);
+        setCategories(cats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
+  const addCategory = async () => {
+    if (!newCategory.trim()) {
+      toast.error('Kategori adı boş olamaz');
+      return;
+    }
+
+    if (categories.includes(newCategory.trim())) {
+      toast.error('Bu kategori zaten mevcut');
+      return;
+    }
+
+    const updatedCategories = [...categories, newCategory.trim()];
+    
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ 
+        setting_value: JSON.stringify(updatedCategories),
+        updated_at: new Date().toISOString()
+      })
+      .eq('setting_key', 'categories');
+
+    if (error) {
+      toast.error('Kategori eklenemedi: ' + error.message);
+    } else {
+      setCategories(updatedCategories);
+      setNewCategory('');
+      toast.success('Kategori eklendi');
+    }
+  };
+
+  const removeCategory = async (category: string) => {
+    if (!confirm(`"${category}" kategorisini silmek istediğinizden emin misiniz?`)) return;
+
+    const updatedCategories = categories.filter(c => c !== category);
+    
+    const { error } = await supabase
+      .from('app_settings')
+      .update({ 
+        setting_value: JSON.stringify(updatedCategories),
+        updated_at: new Date().toISOString()
+      })
+      .eq('setting_key', 'categories');
+
+    if (error) {
+      toast.error('Kategori silinemedi: ' + error.message);
+    } else {
+      setCategories(updatedCategories);
+      toast.success('Kategori silindi');
     }
   };
 
@@ -1250,7 +1321,7 @@ export default function Admin() {
                           <SelectValue placeholder="Seçin" />
                         </SelectTrigger>
                         <SelectContent>
-                          {CATEGORIES.map((cat) => (
+                          {categories.map((cat) => (
                             <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1961,6 +2032,52 @@ export default function Admin() {
             <div className="space-y-6">
               {/* Hero Media Upload */}
               <HeroMediaUpload />
+
+              {/* Category Management */}
+              <Card className="glass">
+                <CardHeader>
+                  <CardTitle>Kategori Yönetimi</CardTitle>
+                  <CardDescription>
+                    Uygulama genelinde kullanılacak kategorileri buradan yönetin
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Yeni kategori ekle"
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && addCategory()}
+                    />
+                    <Button onClick={addCategory}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Ekle
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Mevcut Kategoriler ({categories.length})</Label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {categories.map(cat => (
+                        <div 
+                          key={cat}
+                          className="flex items-center justify-between p-2 bg-muted/50 rounded border"
+                        >
+                          <span className="text-sm">{cat}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeCategory(cat)}
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Data Collection Settings */}
               <Card className="glass">

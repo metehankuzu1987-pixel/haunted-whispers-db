@@ -22,23 +22,12 @@ const COUNTRIES = [
   { code: 'RO', name: 'Romanya' },
 ];
 
-const CATEGORIES = [
-  'Lanetli',
-  'Perili',
-  'Efsane',
-  'Terk edilmiş',
-  'Otel',
-  'Okul',
-  'Hastane',
-  'Kale',
-  'Orman',
-];
-
 const Index = () => {
   const [lang, setLang] = useState<Language>('tr');
   const { t } = useTranslation(lang);
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<string[]>([]);
   const [filters, setFilters] = useState<FilterState>({
     country: '',
     city: '',
@@ -48,6 +37,27 @@ const Index = () => {
     search: '',
   });
   const { trackPageView, trackSearch } = useAnalytics();
+
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data } = await supabase
+          .from('app_settings')
+          .select('setting_value')
+          .eq('setting_key', 'categories')
+          .single();
+        
+        if (data?.setting_value) {
+          const cats = JSON.parse(data.setting_value);
+          setCategories(cats);
+        }
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const fetchPlaces = async () => {
     setLoading(true);
@@ -141,7 +151,7 @@ const Index = () => {
             filters={filters}
             onFiltersChange={setFilters}
             countries={COUNTRIES}
-            categories={CATEGORIES}
+            categories={categories}
           />
         </div>
 

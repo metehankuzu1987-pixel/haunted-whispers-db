@@ -56,6 +56,7 @@ const PlaceDetail = () => {
   const [loading, setLoading] = useState(true);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [voteProcessing, setVoteProcessing] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
   // Edit modu
   const [editMode, setEditMode] = useState(false);
@@ -75,6 +76,27 @@ const PlaceDetail = () => {
   const displayedName = lang === 'en' && trContent[0] ? trContent[0] : place?.name;
   const displayedDescription = lang === 'en' && trContent[1] ? trContent[1] : (place?.description || '');
   const displayedCategory = lang === 'en' && trContent[2] ? trContent[2] : place?.category;
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data } = await supabase
+          .from('app_settings')
+          .select('setting_value')
+          .eq('setting_key', 'categories')
+          .single();
+        
+        if (data?.setting_value) {
+          const cats = JSON.parse(data.setting_value);
+          setCategories(cats);
+        }
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const handleAdminStatusChange = async (status: 'pending' | 'approved' | 'rejected') => {
     if (!place) return;
@@ -382,12 +404,19 @@ const PlaceDetail = () => {
 
             <div className="flex items-center gap-2">
               {editMode ? (
-                <Input
-                  placeholder="Kategori"
+                <Select
                   value={editForm.category}
-                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="w-40"
-                />
+                  onValueChange={(val) => setEditForm({ ...editForm, category: val })}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
                 <Badge variant="outline">{displayedCategory}</Badge>
               )}
