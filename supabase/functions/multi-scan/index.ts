@@ -78,9 +78,11 @@ serve(async (req) => {
           console.log(`Foursquare found ${foursquarePlaces.length} places`);
         } catch (error) {
           const err = error as Error;
+          console.error('Foursquare API error details:', err);
           errors.push(`Foursquare error: ${err.message}`);
         }
       } else {
+        console.error('Foursquare API key not configured');
         errors.push('Foursquare API key not configured');
       }
     }
@@ -251,13 +253,28 @@ async function fetchFromFoursquare(category: string, near: string, limit: number
   const query = category === 'haunted_location' ? 'haunted,ghost,paranormal' : category;
   const capped = Math.min(Math.max(limit || 20, 1), 50);
   const url = `https://api.foursquare.com/v3/places/search?query=${encodeURIComponent(query)}&near=${encodeURIComponent(near)}&limit=${capped}`;
+  
+  console.log('Foursquare request URL:', url);
+  console.log('Foursquare API key length:', apiKey?.length || 0);
+  
   const response = await fetch(url, {
-    headers: { 'Authorization': apiKey, 'Accept': 'application/json' }
+    headers: { 
+      'Authorization': apiKey,
+      'Accept': 'application/json'
+    }
   });
 
-  if (!response.ok) throw new Error(`Foursquare error: ${response.status}`);
+  console.log('Foursquare response status:', response.status);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Foursquare error response:', errorText);
+    throw new Error(`Foursquare API error: ${response.status} - ${errorText}`);
+  }
   
   const data = await response.json();
+  console.log('Foursquare data received:', JSON.stringify(data).substring(0, 200));
+  
   return (data.results || []).map((item: any) => ({
     name: item.name,
     category: 'haunted_location',
@@ -299,14 +316,30 @@ async function fetchFromGoogle(category: string, country: string, apiKey: string
 }
 
 async function fetchFromGeoNames(category: string, country: string, username: string, limit: number): Promise<Place[]> {
-  const capped = Math.min(Math.max(limit || 20, 1), 50);
-  const response = await fetch(
-    `http://api.geonames.org/searchJSON?q=haunted&country=${country}&maxRows=${capped}&username=${username}`
-  );
+  const capped = Math.min(Math.max(limit || 20, 1), 100);
+  
+  // Category-based query mapping
+  const queryMap: Record<string, string> = {
+    'haunted_location': 'haunted ghost abandoned',
+    'cursed_site': 'cursed mysterious',
+    'forgotten_village': 'village abandoned old',
+  };
+  
+  const query = queryMap[category] || 'haunted';
+  
+  // Make country filter optional - if empty, search globally
+  const countryParam = country ? `&country=${country}` : '';
+  const url = `http://api.geonames.org/searchJSON?q=${encodeURIComponent(query)}${countryParam}&maxRows=${capped}&username=${username}`;
+  
+  console.log('GeoNames request URL:', url);
+  
+  const response = await fetch(url);
 
   if (!response.ok) throw new Error(`GeoNames error: ${response.status}`);
   
   const data = await response.json();
+  console.log('GeoNames results count:', data.geonames?.length || 0);
+  
   return (data.geonames || []).map((item: any) => ({
     name: item.name,
     category: 'haunted_location',
@@ -324,16 +357,86 @@ async function fetchFromGeoNames(category: string, country: string, username: st
 }
 
 async function fetchFromAtlasObscura(category: string, country: string): Promise<Place[]> {
-  // Simple scraping approach - in production, use a proper scraping service
   try {
-    const response = await fetch(`https://www.atlasobscura.com/places?q=haunted`);
-    if (!response.ok) throw new Error(`Atlas Obscura error: ${response.status}`);
+    const searchTerm = category === 'haunted_location' ? 'haunted' : 'abandoned';
+    const url = `https://www.atlasobscura.com/search?q=${encodeURIComponent(searchTerm)}`;
     
-    // This is a simplified version - real implementation would parse HTML
-    return [];
+    console.log('Atlas Obscura request URL:', url);
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DataCollector/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      }
+    });
+    
+    if (!response.ok) {
+      console.error('Atlas Obscura error:', response.status);
+      return [];
+    }
+    
+    const html = await response.text();
+    const places: Place[] = [];
+    
+    // Regex patterns for scraping
+    const titleRegex = /<a[^>]*class="[^"]*content-card__title[^"]*"[^>]*>([^<]+)<\/a>/g;
+    const locationRegex = /<div[^>]*class="[^"]*content-card__location[^"]*"[^>]*>([^<]+)<\/div>/g;
+    const linkRegex = /<a[^>]*href="(\/places\/[^"]+)"[^>]*class="[^"]*content-card/g;
+    
+    const titles: string[] = [];
+    const locations: string[] = [];
+    const links: string[] = [];
+    
+    let match;
+    while ((match = titleRegex.exec(html)) !== null) {
+      titles.push(match[1].trim());
+    }
+    while ((match = locationRegex.exec(html)) !== null) {
+      locations.push(match[1].trim());
+    }
+    while ((match = linkRegex.exec(html)) !== null) {
+      links.push(`https://www.atlasobscura.com${match[1]}`);
+    }
+    
+    console.log(`Atlas Obscura scraped: ${titles.length} titles, ${locations.length} locations, ${links.length} links`);
+    
+    // Combine results (max 20)
+    const count = Math.min(titles.length, locations.length, links.length, 20);
+    for (let i = 0; i < count; i++) {
+      const locationParts = locations[i].split(',').map(s => s.trim());
+      const city = locationParts[0] || '';
+      const countryName = locationParts[locationParts.length - 1] || '';
+      
+      // Try to extract country code from country name
+      const countryCodeMap: Record<string, string> = {
+        'United States': 'US', 'Turkey': 'TR', 'United Kingdom': 'GB',
+        'Germany': 'DE', 'France': 'FR', 'Italy': 'IT', 'Japan': 'JP',
+        'Spain': 'ES', 'Mexico': 'MX', 'Canada': 'CA', 'Australia': 'AU'
+      };
+      const countryCode = countryCodeMap[countryName] || country || '';
+      
+      places.push({
+        name: titles[i],
+        category: 'haunted_location',
+        description: `Atlas Obscura featured location in ${locations[i]}`,
+        country_code: countryCode,
+        city: city,
+        lat: undefined,
+        lon: undefined,
+        sources: [{
+          url: links[i],
+          domain: 'atlasobscura.com',
+          type: 'website',
+        }],
+      });
+    }
+    
+    console.log(`Atlas Obscura returning ${places.length} places`);
+    return places;
+    
   } catch (error) {
     const err = error as Error;
-    console.log('Atlas Obscura scraping skipped:', err.message);
+    console.error('Atlas Obscura scraping error:', err.message);
     return [];
   }
 }
