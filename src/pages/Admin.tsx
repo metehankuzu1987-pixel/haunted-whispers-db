@@ -37,7 +37,8 @@ export default function Admin() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [scanLogs, setScanLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [dataCollectionMethod, setDataCollectionMethod] = useState<'api' | 'ai'>('api');
+  const [aiScanMode, setAiScanMode] = useState<'off' | 'lovable' | 'openai' | 'both'>('both');
+  const [apiScanEnabled, setApiScanEnabled] = useState(false);
   const [enabledApis, setEnabledApis] = useState<string[]>(['dbpedia']);
   const [useAllApis, setUseAllApis] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
@@ -60,7 +61,6 @@ export default function Admin() {
   });
   const [scanningPaused, setScanningPaused] = useState(false);
   const [selectedAiModel, setSelectedAiModel] = useState('gpt-4o-mini');
-  const [aiProviderScan, setAiProviderScan] = useState<'lovable' | 'openai' | 'both'>('both');
   const [aiProviderTranslate, setAiProviderTranslate] = useState<'lovable' | 'openai'>('lovable');
   const [aiNotificationsEnabled, setAiNotificationsEnabled] = useState(true);
   
@@ -105,6 +105,9 @@ export default function Admin() {
       fetchIgnoredIPs();
       fetchComments();
       fetchApiKeys();
+      fetchOpenAILimits();
+      fetchOpenAIUsage();
+      fetchAIHealthStatus();
       fetchScanStatus();
       fetchCategories();
       fetchOpenAILimits();
@@ -233,12 +236,17 @@ export default function Admin() {
   const fetchSettings = async () => {
     const { data, error } = await supabase
       .from('app_settings')
-      .select('setting_value')
-      .eq('setting_key', 'data_collection_method')
-      .single();
+      .select('setting_key, setting_value')
+      .in('setting_key', ['ai_scan_mode', 'api_scan_enabled']);
     
     if (data && !error) {
-      setDataCollectionMethod(data.setting_value as 'api' | 'ai');
+      data.forEach((setting) => {
+        if (setting.setting_key === 'ai_scan_mode') {
+          setAiScanMode(setting.setting_value as 'off' | 'lovable' | 'openai' | 'both');
+        } else if (setting.setting_key === 'api_scan_enabled') {
+          setApiScanEnabled(setting.setting_value === 'true');
+        }
+      });
     }
   };
 
@@ -384,7 +392,6 @@ export default function Admin() {
           if (item.setting_key === 'geonames_username') keys.geonames_username = item.setting_value || '';
           if (item.setting_key === 'openai_api_key') keys.openai = item.setting_value || '';
           if (item.setting_key === 'ai_model') setSelectedAiModel(item.setting_value || 'gpt-4o-mini');
-          if (item.setting_key === 'ai_provider_scan') setAiProviderScan(item.setting_value as any || 'both');
           if (item.setting_key === 'ai_provider_translate') setAiProviderTranslate(item.setting_value as any || 'lovable');
           if (item.setting_key === 'ai_notifications_enabled') setAiNotificationsEnabled(item.setting_value === 'true');
         });
@@ -689,20 +696,33 @@ export default function Admin() {
 
   const saveSettings = async () => {
     setLoading(true);
-    const { error } = await supabase
+    
+    // Update ai_scan_mode
+    const { error: aiScanError } = await supabase
       .from('app_settings')
       .update({ 
-        setting_value: dataCollectionMethod,
+        setting_value: aiScanMode,
         updated_at: new Date().toISOString()
       })
-      .eq('setting_key', 'data_collection_method');
+      .eq('setting_key', 'ai_scan_mode');
+    
+    // Update api_scan_enabled
+    const { error: apiScanError } = await supabase
+      .from('app_settings')
+      .update({ 
+        setting_value: apiScanEnabled ? 'true' : 'false',
+        updated_at: new Date().toISOString()
+      })
+      .eq('setting_key', 'api_scan_enabled');
+    
+    const error = aiScanError || apiScanError;
 
     setLoading(false);
 
     if (error) {
       toast.error('Ayarlar kaydedilemedi: ' + error.message);
     } else {
-      toast.success('Ayarlar kaydedildi! Otomatik taramalar şimdi ' + (dataCollectionMethod === 'ai' ? 'AI' : 'API') + ' kullanacak.');
+      toast.success('Tarama ayarları başarıyla kaydedildi!');
     }
   };
 
@@ -816,14 +836,22 @@ export default function Admin() {
     }
   };
 
-  const triggerScan = async () => {
+  const triggerAIScan = async () => {
+    if (aiScanMode === 'off') {
+      toast.error('AI tarama kapalı. Lütfen AI Tarama Sistemi\'nden bir mod seçin.');
+      return;
+    }
+    
+    if ((aiScanMode === 'openai' || aiScanMode === 'both') && !apiKeys.openai) {
+      toast.error('OpenAI API key gerekli! Lütfen API Keys sekmesinden ekleyin.');
+      return;
+    }
+    
     setLoading(true);
-    const scanType = dataCollectionMethod === 'ai' ? 'AI' : 'API';
-    toast.info(`${scanType} tarama başlatılıyor...`);
+    toast.info('AI tarama başlatılıyor...');
 
     try {
-      const functionName = dataCollectionMethod === 'ai' ? 'ai-scan' : 'api-scan';
-      const { data, error } = await supabase.functions.invoke(functionName, {
+      const { data, error } = await supabase.functions.invoke('ai-scan', {
         body: { manual: true }
       });
 
@@ -850,7 +878,40 @@ export default function Admin() {
       fetchPlaces();
       fetchScanLogs();
     } catch (error: any) {
-      toast.error(`${scanType} tarama hatası: ` + error.message);
+      toast.error(`AI tarama hatası: ` + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerAPIScan = async () => {
+    if (!apiScanEnabled) {
+      toast.error('API tarama kapalı. Lütfen API Tarama Sistemi\'ni aktif edin.');
+      return;
+    }
+    
+    setLoading(true);
+    toast.info('API tarama başlatılıyor...');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('api-scan', {
+        body: { manual: true }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success(
+        `✅ API tarama tamamlandı!\n` +
+        `Bulunan: ${data.places_found || 0}\n` +
+        `Eklenen: ${data.places_added || data.addedCount || 0}`
+      );
+      
+      fetchPlaces();
+      fetchScanLogs();
+    } catch (error: any) {
+      toast.error(`API tarama hatası: ` + error.message);
     } finally {
       setLoading(false);
     }
@@ -1571,18 +1632,108 @@ export default function Admin() {
               </CardHeader>
             </Card>
 
+            {/* AI Tarama Sistemi */}
             <Card className="glass">
               <CardHeader>
-                <CardTitle>{dataCollectionMethod === 'ai' ? 'AI Web Tarama' : 'API Tarama'}</CardTitle>
+                <CardTitle>🤖 AI Tarama Sistemi</CardTitle>
                 <CardDescription>
-                  Sistem her 2 saatte bir otomatik olarak <strong>{dataCollectionMethod === 'ai' ? 'AI' : 'API'}</strong> taraması yapar. 
-                  Manuel başlatmak için butona tıklayın.
+                  AI tarama modunu seçin veya kapatın
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button onClick={triggerScan} disabled={loading || scanningPaused} className="w-full">
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                  {dataCollectionMethod === 'ai' ? 'AI' : 'API'} Taraması Başlat
+              <CardContent className="space-y-4">
+                <RadioGroup value={aiScanMode} onValueChange={(v: any) => setAiScanMode(v)} className="space-y-3">
+                  <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                    <RadioGroupItem value="off" id="ai-off" />
+                    <div className="flex-1">
+                      <Label htmlFor="ai-off" className="cursor-pointer font-medium">Kapalı</Label>
+                      <p className="text-xs text-muted-foreground">AI tarama yapmaz</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                    <RadioGroupItem value="lovable" id="ai-lovable" />
+                    <div className="flex-1">
+                      <Label htmlFor="ai-lovable" className="cursor-pointer font-medium">Sadece Lovable AI</Label>
+                      <p className="text-xs text-muted-foreground">Ücretsiz, aylık limit var</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2 p-3 rounded-lg border">
+                    <RadioGroupItem value="openai" id="ai-openai" />
+                    <div className="flex-1">
+                      <Label htmlFor="ai-openai" className="cursor-pointer font-medium">Sadece OpenAI</Label>
+                      <p className="text-xs text-muted-foreground">Ücretli, sınırsız tarama</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2 p-3 rounded-lg border border-primary/50 bg-primary/5">
+                    <RadioGroupItem value="both" id="ai-both" />
+                    <div className="flex-1">
+                      <Label htmlFor="ai-both" className="cursor-pointer font-medium">Hibrit (ÖNERİLEN) ⭐</Label>
+                      <p className="text-xs text-muted-foreground">Lovable AI önce çalışır, limit aşılırsa OpenAI devreye girer</p>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+
+            {/* API Tarama Sistemi */}
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>🌐 API Tarama Sistemi</CardTitle>
+                <CardDescription>
+                  DBpedia, Foursquare gibi API'lerden veri toplar
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="api-enabled">API Tarama</Label>
+                  <input 
+                    type="checkbox" 
+                    id="api-enabled" 
+                    checked={apiScanEnabled} 
+                    onChange={(e) => setApiScanEnabled(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ℹ️ API tarama için "Gelişmiş API" sekmesinden hangi API'lerin kullanılacağını seçebilirsiniz
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Hızlı Tarama Butonları */}
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle>⚡ Hızlı Tarama</CardTitle>
+                <CardDescription>
+                  Tarama sistemlerini manuel olarak başlatın
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Button 
+                    onClick={triggerAIScan} 
+                    disabled={loading || scanningPaused || aiScanMode === 'off'}
+                    className="w-full"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                    🤖 AI Tarama
+                  </Button>
+                  <Button 
+                    onClick={triggerAPIScan} 
+                    disabled={loading || scanningPaused || !apiScanEnabled}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                    🌐 API Tarama
+                  </Button>
+                </div>
+                <div className="text-xs space-y-1 text-muted-foreground">
+                  <p>• AI Sistemi: <strong>{aiScanMode === 'off' ? 'Kapalı' : aiScanMode === 'lovable' ? 'Lovable' : aiScanMode === 'openai' ? 'OpenAI' : 'Hibrit'}</strong></p>
+                  <p>• API Sistemi: <strong>{apiScanEnabled ? 'Aktif' : 'Pasif'}</strong></p>
+                </div>
+                <Button onClick={saveSettings} disabled={loading} className="w-full" variant="secondary">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
+                  Ayarları Kaydet
                 </Button>
               </CardContent>
             </Card>
@@ -1684,41 +1835,33 @@ export default function Admin() {
                 </CardContent>
               </Card>
 
+              {/* AI Sağlayıcı Ayarları için Çeviri - Tarama artık yukarıda */}
               <Card>
                 <CardHeader>
-                  <CardTitle>AI Sağlayıcı Ayarları</CardTitle>
+                  <CardTitle>AI Çeviri Ayarları</CardTitle>
                   <CardDescription>
-                    Lovable AI ve OpenAI arasında seçim yapın veya ikisini birden kullanın
+                    Çeviri işlemleri için AI sağlayıcı seçin
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-base font-semibold">🤖 AI Tarama İçin:</Label>
-                      <RadioGroup value={aiProviderScan} onValueChange={(v: any) => {
-                        setAiProviderScan(v);
-                        supabase.from('app_settings').upsert({ setting_key: 'ai_provider_scan', setting_value: v, updated_at: new Date().toISOString() }, { onConflict: 'setting_key' }).then(() => toast.success('AI tarama sağlayıcısı güncellendi'));
+                      <Label className="text-base font-semibold">🌐 Çeviri İçin:</Label>
+                      <RadioGroup value={aiProviderTranslate} onValueChange={(v: any) => {
+                        setAiProviderTranslate(v);
+                        supabase.from('app_settings').upsert({ setting_key: 'ai_provider_translate', setting_value: v, updated_at: new Date().toISOString() }, { onConflict: 'setting_key' }).then(() => toast.success('AI çeviri sağlayıcısı güncellendi'));
                       }} className="mt-2 space-y-2">
                         <div className="flex items-start space-x-2 p-3 rounded-lg border">
-                          <RadioGroupItem value="lovable" id="scan-lovable" />
+                          <RadioGroupItem value="lovable" id="translate-lovable" />
                           <div className="flex-1">
-                            <Label htmlFor="scan-lovable" className="cursor-pointer font-medium">
-                              Sadece Lovable AI (Ücretsiz, Aylık Limit Var)
+                            <Label htmlFor="translate-lovable" className="cursor-pointer font-medium">
+                              Lovable AI (Ücretsiz)
                             </Label>
-                            <p className="text-xs text-muted-foreground mt-1">Hızlı ve ücretsiz, aylık kullanım limiti var</p>
+                            <p className="text-xs text-muted-foreground mt-1">Çeviri için Lovable AI kullan</p>
                           </div>
                         </div>
                         <div className="flex items-start space-x-2 p-3 rounded-lg border">
-                          <RadioGroupItem value="openai" id="scan-openai" />
-                          <div className="flex-1">
-                            <Label htmlFor="scan-openai" className="cursor-pointer font-medium">
-                              Sadece OpenAI (Ücretli, Sınırsız)
-                            </Label>
-                            <p className="text-xs text-muted-foreground mt-1">Daha kaliteli sonuçlar, her istek ücretli</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start space-x-2 p-3 rounded-lg border border-primary/50 bg-primary/5">
-                          <RadioGroupItem value="both" id="scan-both" />
+                          <RadioGroupItem value="openai" id="translate-openai" />
                           <div className="flex-1">
                             <Label htmlFor="scan-both" className="cursor-pointer font-medium">
                               İkisini Birden Kullan (ÖNERİLEN) ⭐
@@ -2333,51 +2476,7 @@ export default function Admin() {
                 </CardContent>
               </Card>
 
-              {/* Data Collection Settings */}
-              <Card className="glass">
-                <CardHeader>
-                  <CardTitle>Veri Toplama Ayarları</CardTitle>
-                  <CardDescription>
-                    Otomatik veri toplama yöntemini seçin. Bu ayar hem manuel hem de otomatik taramaları etkiler.
-                  </CardDescription>
-                </CardHeader>
-              <CardContent className="space-y-6">
-                <RadioGroup 
-                  value={dataCollectionMethod} 
-                  onValueChange={(val) => setDataCollectionMethod(val as 'api' | 'ai')}
-                  className="space-y-4"
-                >
-                  <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                    <RadioGroupItem value="api" id="api" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="api" className="text-base font-semibold cursor-pointer">
-                        API Tarama
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Wikipedia, Wikidata ve OpenStreetMap API'lerinden ücretsiz veri toplar.
-                        Daha güvenilir ancak sınırlı sonuçlar.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                    <RadioGroupItem value="ai" id="ai" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="ai" className="text-base font-semibold cursor-pointer">
-                        AI Tarama
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Lovable AI kullanarak web'de akıllı arama yapar.
-                        Daha geniş sonuçlar ancak kullanım kredisi gerektirir.
-                      </p>
-                    </div>
-                  </div>
-                </RadioGroup>
-                <Button onClick={saveSettings} disabled={loading} className="w-full">
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
-                  Kaydet
-                </Button>
-              </CardContent>
-            </Card>
+              {/* Eski Veri Toplama Ayarları kartı kaldırıldı - artık "Tarama" sekmesinde */}
 
             {/* IP Filtering Settings */}
             <Card className="glass">

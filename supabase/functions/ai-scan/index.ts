@@ -183,15 +183,24 @@ serve(async (req) => {
     const { data: settingsData } = await supabase
       .from('app_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['ai_provider_scan', 'openai_api_key', 'ai_model']);
+      .in('setting_key', ['ai_scan_mode', 'openai_api_key', 'ai_model']);
 
     const settings = Object.fromEntries(
       settingsData?.map(s => [s.setting_key, s.setting_value]) || []
     );
 
-    const provider = settings.ai_provider_scan || 'lovable';
+    const aiScanMode = settings.ai_scan_mode || 'both';
     const openaiKey = settings.openai_api_key || '';
     const aiModel = settings.ai_model || 'gpt-4o-mini';
+    
+    // Check if AI scanning is disabled
+    if (aiScanMode === 'off') {
+      console.log("AI scan is disabled in settings");
+      return new Response(
+        JSON.stringify({ error: 'AI scan is disabled' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Create scan log
     const { data: scanLog } = await supabase
@@ -235,7 +244,7 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
                                 (lovableHealth.status === 'no_credits' && lastFailureMonth !== currentMonth);
 
     // Lovable AI çağrısı
-    if ((provider === 'lovable' || provider === 'both') && shouldRetryLovable) {
+    if ((aiScanMode === 'lovable' || aiScanMode === 'both') && shouldRetryLovable) {
       notifications.push('🔮 Lovable AI ile tarama başlatıldı...');
       try {
         const lovablePlaces = await fetchFromLovableAI(lovableApiKey, prompt);
@@ -257,7 +266,7 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
         }
         
         // OpenAI'a geç
-        if (provider === 'both' && openaiKey && (errorCode === 429 || errorCode === 402)) {
+        if (aiScanMode === 'both' && openaiKey && (errorCode === 429 || errorCode === 402)) {
           notifications.push('🔄 OpenAI\'a geçiliyor...');
           try {
             const limitCheck = await checkOpenAILimits(supabase);
@@ -284,17 +293,17 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
             await updateAIHealth(supabase, 'openai', false);
             throw new Error('Her iki AI sağlayıcı da başarısız oldu');
           }
-        } else if (provider === 'lovable') {
+        } else if (aiScanMode === 'lovable') {
           throw lovableError;
         }
       }
-    } else if ((provider === 'lovable' || provider === 'both') && !shouldRetryLovable) {
+    } else if ((aiScanMode === 'lovable' || aiScanMode === 'both') && !shouldRetryLovable) {
       // Lovable AI kota yenilenmesini bekliyor
       const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const renewalDate = nextMonth.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
       notifications.push(`⏳ Lovable AI kota yenilenmesini bekliyor (${renewalDate})`);
       
-      if (provider === 'both' && openaiKey) {
+      if (aiScanMode === 'both' && openaiKey) {
         notifications.push('🔄 OpenAI\'a geçiliyor...');
         try {
           const limitCheck = await checkOpenAILimits(supabase);
@@ -325,7 +334,7 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
     }
 
     // Sadece OpenAI kullanılacaksa
-    if (provider === 'openai' && openaiKey) {
+    if (aiScanMode === 'openai' && openaiKey) {
       notifications.push('🤖 OpenAI ile tarama başlatıldı...');
       try {
         const limitCheck = await checkOpenAILimits(supabase);
@@ -446,7 +455,7 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
           places_found: uniquePlaces.length,
           places_added: addedCount,
           notifications,
-          provider_used: provider
+          provider_used: aiScanMode
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
