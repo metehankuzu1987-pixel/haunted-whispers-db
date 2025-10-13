@@ -50,6 +50,13 @@ export default function Admin() {
   const [newIP, setNewIP] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentCount, setCommentCount] = useState(0);
+  const [apiKeys, setApiKeys] = useState({
+    google_places: '',
+    foursquare: '',
+    geonames_username: '',
+    openai: ''
+  });
+  const [scanningPaused, setScanningPaused] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -76,6 +83,8 @@ export default function Admin() {
       fetchCurrentIP();
       fetchIgnoredIPs();
       fetchComments();
+      fetchApiKeys();
+      fetchScanStatus();
     }
   }, [isAdmin]);
 
@@ -332,6 +341,85 @@ export default function Admin() {
       toast.success('Yorum silindi');
     } catch (error: any) {
       toast.error('Yorum silinemedi: ' + error.message);
+    }
+  };
+
+  const fetchApiKeys = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('setting_key, setting_value')
+        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key']);
+      
+      if (data) {
+        const keys: any = { google_places: '', foursquare: '', geonames_username: '', openai: '' };
+        data.forEach(item => {
+          if (item.setting_key === 'google_places_api_key') keys.google_places = item.setting_value || '';
+          if (item.setting_key === 'foursquare_api_key') keys.foursquare = item.setting_value || '';
+          if (item.setting_key === 'geonames_username') keys.geonames_username = item.setting_value || '';
+          if (item.setting_key === 'openai_api_key') keys.openai = item.setting_value || '';
+        });
+        setApiKeys(keys);
+      }
+    } catch (error) {
+      console.error('Failed to fetch API keys:', error);
+    }
+  };
+
+  const fetchScanStatus = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_key', 'scanning_paused')
+        .single();
+      
+      if (data) {
+        setScanningPaused(data.setting_value === 'true');
+      }
+    } catch (error) {
+      console.error('Failed to fetch scan status:', error);
+    }
+  };
+
+  const saveApiKey = async (keyName: string, value: string) => {
+    const settingKey = keyName === 'google_places' ? 'google_places_api_key' 
+      : keyName === 'foursquare' ? 'foursquare_api_key'
+      : keyName === 'geonames_username' ? 'geonames_username'
+      : 'openai_api_key';
+
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ 
+        setting_key: settingKey,
+        setting_value: value,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+
+    if (error) {
+      toast.error('API Key kaydedilemedi: ' + error.message);
+    } else {
+      toast.success('API Key kaydedildi');
+      fetchApiKeys();
+    }
+  };
+
+  const toggleScanning = async () => {
+    const newStatus = !scanningPaused;
+    
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ 
+        setting_key: 'scanning_paused',
+        setting_value: newStatus.toString(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+
+    if (error) {
+      toast.error('Durum değiştirilemedi: ' + error.message);
+    } else {
+      setScanningPaused(newStatus);
+      toast.success(newStatus ? '🛑 Tüm taramalar durduruldu' : '▶️ Taramalar aktif');
     }
   };
 
@@ -794,7 +882,7 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="places" className="w-full">
-          <TabsList className="grid w-full grid-cols-10">
+          <TabsList className="grid w-full grid-cols-11">
             <TabsTrigger value="places">Yerler ({places.length})</TabsTrigger>
             <TabsTrigger value="add">Yeni Ekle</TabsTrigger>
             <TabsTrigger value="scan">Tarama</TabsTrigger>
@@ -808,6 +896,10 @@ export default function Admin() {
                   {commentCount}
                 </span>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="api-settings">
+              <Settings className="w-4 h-4 mr-1" />
+              API Keys
             </TabsTrigger>
             <TabsTrigger value="analytics">
               <BarChart3 className="w-4 h-4 mr-1" />
@@ -1017,6 +1109,50 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="scan" className="space-y-4">
+            {scanningPaused && (
+              <Card className="border-orange-500/50 bg-orange-500/10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-300">
+                    <AlertTriangle className="w-5 h-5" />
+                    Taramalar Durduruldu
+                  </CardTitle>
+                  <CardDescription>
+                    Tüm otomatik taramalar şu anda duraklatılmış durumda. Taramaları yeniden başlatmak için aşağıdaki butona tıklayın.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+
+            <Card className="glass">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Tarama Kontrolü</CardTitle>
+                    <CardDescription>
+                      Tüm otomatik taramaları durdur veya başlat
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={toggleScanning}
+                    variant={scanningPaused ? "default" : "destructive"}
+                    size="lg"
+                  >
+                    {scanningPaused ? (
+                      <>
+                        <Play className="w-4 h-4 mr-2" />
+                        Taramaları Başlat
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Tüm Taramaları Durdur
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+            </Card>
+
             <Card className="glass">
               <CardHeader>
                 <CardTitle>{dataCollectionMethod === 'ai' ? 'AI Web Tarama' : 'API Tarama'}</CardTitle>
@@ -1026,7 +1162,7 @@ export default function Admin() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={triggerScan} disabled={loading} className="w-full">
+                <Button onClick={triggerScan} disabled={loading || scanningPaused} className="w-full">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                   {dataCollectionMethod === 'ai' ? 'AI' : 'API'} Taraması Başlat
                 </Button>
@@ -1061,12 +1197,112 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="api-settings">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Çoklu API Entegrasyonu</CardTitle>
+                  <CardDescription>
+                    Harici API servisleri için gerekli anahtarları girin
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="google-places-key">Google Places API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="google-places-key"
+                        type="password"
+                        placeholder="AIza..."
+                        value={apiKeys.google_places}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, google_places: e.target.value }))}
+                      />
+                      <Button onClick={() => saveApiKey('google_places', apiKeys.google_places)}>
+                        Kaydet
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Google Places API için gerekli. <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="underline">Buradan</a> alabilirsiniz.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="foursquare-key">Foursquare API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="foursquare-key"
+                        type="password"
+                        placeholder="fsq..."
+                        value={apiKeys.foursquare}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, foursquare: e.target.value }))}
+                      />
+                      <Button onClick={() => saveApiKey('foursquare', apiKeys.foursquare)}>
+                        Kaydet
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Foursquare Places API için gerekli. <a href="https://foursquare.com/developers/" target="_blank" rel="noopener noreferrer" className="underline">Buradan</a> alabilirsiniz.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="geonames-username">GeoNames Username</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="geonames-username"
+                        type="text"
+                        placeholder="kullanıcı_adı"
+                        value={apiKeys.geonames_username}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, geonames_username: e.target.value }))}
+                      />
+                      <Button onClick={() => saveApiKey('geonames_username', apiKeys.geonames_username)}>
+                        Kaydet
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      GeoNames web servisleri için gerekli. <a href="https://www.geonames.org/login" target="_blank" rel="noopener noreferrer" className="underline">Buradan</a> ücretsiz hesap oluşturabilirsiniz.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI API Ayarları</CardTitle>
+                  <CardDescription>
+                    Kendi OpenAI API anahtarınızı kullanmak için
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-key">OpenAI API Key (Opsiyonel)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="openai-key"
+                        type="password"
+                        placeholder="sk-..."
+                        value={apiKeys.openai}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, openai: e.target.value }))}
+                      />
+                      <Button onClick={() => saveApiKey('openai', apiKeys.openai)}>
+                        Kaydet
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Varsayılan olarak Lovable AI kullanılır. Kendi OpenAI anahtarınızı kullanmak isterseniz buraya girin.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           <TabsContent value="apis" className="space-y-4">
             <Card className="glass">
               <CardHeader>
                 <CardTitle>Çoklu API Entegrasyonu</CardTitle>
                 <CardDescription>
-                  Birden fazla kaynaktan paralel veri toplayın. API anahtarları Cloud ayarlarından girilmelidir.
+                  Birden fazla kaynaktan paralel veri toplayın. API anahtarlarını "API Keys" sekmesinden girebilirsiniz.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1154,7 +1390,7 @@ export default function Admin() {
                   </div>
                 )}
 
-                <Button onClick={triggerMultiScan} disabled={loading} className="w-full">
+                <Button onClick={triggerMultiScan} disabled={loading || scanningPaused} className="w-full">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                   Çoklu API Taraması Başlat
                 </Button>
