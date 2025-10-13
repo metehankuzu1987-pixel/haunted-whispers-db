@@ -179,28 +179,28 @@ serve(async (req) => {
   try {
     console.log("AI scan started");
 
-    // Get AI provider settings
+    // Get scan mode settings
     const { data: settingsData } = await supabase
       .from('app_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['ai_scan_mode', 'openai_api_key', 'ai_model']);
+      .in('setting_key', ['scan_mode', 'openai_api_key', 'ai_model']);
 
     const settings = Object.fromEntries(
       settingsData?.map(s => [s.setting_key, s.setting_value]) || []
     );
 
-    const rawAiScanMode = settings.ai_scan_mode || 'both';
-    const aiScanMode = ['off', 'lovable', 'openai', 'both'].includes(rawAiScanMode) 
-      ? rawAiScanMode as 'off' | 'lovable' | 'openai' | 'both'
-      : 'both';
+    const rawScanMode = settings.scan_mode || 'ai_hybrid';
+    const scanMode = ['off', 'ai_hybrid', 'api_only', 'ai_api_both'].includes(rawScanMode) 
+      ? rawScanMode as 'off' | 'ai_hybrid' | 'api_only' | 'ai_api_both'
+      : 'ai_hybrid';
     const openaiKey = settings.openai_api_key || '';
     const aiModel = settings.ai_model || 'gpt-4o-mini';
     
     // Check if AI scanning is disabled
-    if (aiScanMode === 'off') {
-      console.log("AI scan is disabled in settings");
+    if (scanMode === 'off' || scanMode === 'api_only') {
+      console.log(`AI scan cannot run with scan_mode: ${scanMode}`);
       return new Response(
-        JSON.stringify({ error: 'AI scan is disabled' }),
+        JSON.stringify({ error: `AI scan is not available in ${scanMode} mode` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -246,8 +246,8 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
                                 (lovableHealth.status === 'rate_limited' && lastFailureMonth !== currentMonth) ||
                                 (lovableHealth.status === 'no_credits' && lastFailureMonth !== currentMonth);
 
-    // Lovable AI çağrısı
-    if ((aiScanMode === 'lovable' || aiScanMode === 'both') && shouldRetryLovable) {
+    // Lovable AI çağrısı (ai_hybrid ve ai_api_both için)
+    if ((scanMode === 'ai_hybrid' || scanMode === 'ai_api_both') && shouldRetryLovable) {
       notifications.push('🔮 Lovable AI ile tarama başlatıldı...');
       try {
         const lovablePlaces = await fetchFromLovableAI(lovableApiKey, prompt);
@@ -268,8 +268,8 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
           notifications.push(`⚠️ Lovable AI başarısız: ${lovableError.message}`);
         }
         
-        // OpenAI'a geç
-        if (aiScanMode === 'both' && openaiKey && (errorCode === 429 || errorCode === 402)) {
+        // OpenAI'a geç (ai_hybrid modunda)
+        if (scanMode === 'ai_hybrid' && openaiKey && (errorCode === 429 || errorCode === 402)) {
           notifications.push('🔄 OpenAI\'a geçiliyor...');
           try {
             const limitCheck = await checkOpenAILimits(supabase);
@@ -296,17 +296,15 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
             await updateAIHealth(supabase, 'openai', false);
             throw new Error('Her iki AI sağlayıcı da başarısız oldu');
           }
-        } else if (aiScanMode === 'lovable') {
-          throw lovableError;
         }
       }
-    } else if ((aiScanMode === 'lovable' || aiScanMode === 'both') && !shouldRetryLovable) {
+    } else if ((scanMode === 'ai_hybrid' || scanMode === 'ai_api_both') && !shouldRetryLovable) {
       // Lovable AI kota yenilenmesini bekliyor
       const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const renewalDate = nextMonth.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
       notifications.push(`⏳ Lovable AI kota yenilenmesini bekliyor (${renewalDate})`);
       
-      if (aiScanMode === 'both' && openaiKey) {
+      if (scanMode === 'ai_hybrid' && openaiKey) {
         notifications.push('🔄 OpenAI\'a geçiliyor...');
         try {
           const limitCheck = await checkOpenAILimits(supabase);
@@ -336,33 +334,20 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
       }
     }
 
-    // Sadece OpenAI kullanılacaksa
-    if (aiScanMode === 'openai' && openaiKey) {
-      notifications.push('🤖 OpenAI ile tarama başlatıldı...');
+    // ai_api_both modunda API fallback (hiç sonuç yok ise)
+    if (scanMode === 'ai_api_both' && allPlaces.length === 0) {
+      notifications.push('🔄 API taramaya geçiliyor...');
       try {
-        const limitCheck = await checkOpenAILimits(supabase);
-        notifications.push(`ℹ️ OpenAI kullanımı: ${limitCheck.todayUsage + 1}/günlük limit`);
-        
-        const openaiPlaces = await fetchFromOpenAI(openaiKey, aiModel, prompt);
-        allPlaces.push(...openaiPlaces);
-        
-        const estimatedTokens = 500 * openaiPlaces.length;
-        const estimatedCost = estimatedTokens * 0.00001;
-        
-        await supabase.from('openai_usage_logs').insert({
-          function_name: 'ai-scan',
-          tokens_used: estimatedTokens,
-          cost_usd: estimatedCost,
-          success: true
+        const { data, error } = await supabase.functions.invoke('api-scan', {
+          body: { auto: true, from_ai_fallback: true }
         });
         
-        notifications.push(`✅ OpenAI: ${openaiPlaces.length} yer bulundu (~$${estimatedCost.toFixed(4)})`);
-        await updateAIHealth(supabase, 'openai', true);
-      } catch (openaiError: any) {
-        console.error('OpenAI error:', openaiError);
-        notifications.push(`❌ ${openaiError.message}`);
-        await updateAIHealth(supabase, 'openai', false);
-        throw openaiError;
+        if (!error && data) {
+          notifications.push(`✅ API: ${data.places_found || 0} yer bulundu, ${data.places_added || 0} eklendi`);
+        }
+      } catch (apiError: any) {
+        console.error('API scan fallback error:', apiError);
+        notifications.push(`⚠️ API tarama da başarısız: ${apiError.message}`);
       }
     }
 
@@ -458,7 +443,7 @@ JSON array formatında döndür: [{name, category, description, country_code, ci
           places_found: uniquePlaces.length,
           places_added: addedCount,
           notifications,
-          provider_used: aiScanMode
+          provider_used: scanMode
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

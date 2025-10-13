@@ -37,8 +37,7 @@ export default function Admin() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [scanLogs, setScanLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [aiScanMode, setAiScanMode] = useState<'off' | 'lovable' | 'openai' | 'both'>('both');
-  const [apiScanEnabled, setApiScanEnabled] = useState(false);
+  const [scanMode, setScanMode] = useState<'off' | 'ai_hybrid' | 'api_only' | 'ai_api_both'>('ai_hybrid');
   const [enabledApis, setEnabledApis] = useState<string[]>(['dbpedia']);
   const [useAllApis, setUseAllApis] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
@@ -234,14 +233,12 @@ export default function Admin() {
     const { data, error } = await supabase
       .from('app_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['ai_scan_mode', 'api_scan_enabled']);
+      .in('setting_key', ['scan_mode']);
     
     if (data && !error) {
       data.forEach((setting) => {
-        if (setting.setting_key === 'ai_scan_mode') {
-          setAiScanMode(setting.setting_value as 'off' | 'lovable' | 'openai' | 'both');
-        } else if (setting.setting_key === 'api_scan_enabled') {
-          setApiScanEnabled(setting.setting_value === 'true');
+        if (setting.setting_key === 'scan_mode') {
+          setScanMode(setting.setting_value as 'off' | 'ai_hybrid' | 'api_only' | 'ai_api_both');
         }
       });
     }
@@ -696,26 +693,14 @@ export default function Admin() {
 
   const saveSettings = async () => {
     setLoading(true);
-    
-    // Update ai_scan_mode
-    const { error: aiScanError } = await supabase
+
+    const { error } = await supabase
       .from('app_settings')
       .update({ 
-        setting_value: aiScanMode,
+        setting_value: scanMode,
         updated_at: new Date().toISOString()
       })
-      .eq('setting_key', 'ai_scan_mode');
-    
-    // Update api_scan_enabled
-    const { error: apiScanError } = await supabase
-      .from('app_settings')
-      .update({ 
-        setting_value: apiScanEnabled ? 'true' : 'false',
-        updated_at: new Date().toISOString()
-      })
-      .eq('setting_key', 'api_scan_enabled');
-    
-    const error = aiScanError || apiScanError;
+      .eq('setting_key', 'scan_mode');
 
     setLoading(false);
 
@@ -837,14 +822,18 @@ export default function Admin() {
   };
 
   const triggerAIScan = async () => {
-    if (aiScanMode === 'off') {
-      toast.error('AI tarama kapalı. Lütfen AI Tarama Sistemi\'nden bir mod seçin.');
+    if (scanMode === 'off') {
+      toast.error('Tarama kapalı. Lütfen Tarama Modu\'ndan bir seçenek seçin.');
       return;
     }
     
-    if ((aiScanMode === 'openai' || aiScanMode === 'both') && !apiKeys.openai) {
-      toast.error('OpenAI API key gerekli! Lütfen API Keys sekmesinden ekleyin.');
+    if (scanMode === 'api_only') {
+      toast.error('API tarama modu seçili. AI tarama için farklı bir mod seçin.');
       return;
+    }
+    
+    if (!apiKeys.openai && (scanMode === 'ai_hybrid' || scanMode === 'ai_api_both')) {
+      toast.warning('OpenAI API key eksik. Sadece Lovable AI kullanılacak.');
     }
     
     setLoading(true);
@@ -885,8 +874,13 @@ export default function Admin() {
   };
 
   const triggerAPIScan = async () => {
-    if (!apiScanEnabled) {
-      toast.error('API tarama kapalı. Lütfen API Tarama Sistemi\'ni aktif edin.');
+    if (scanMode === 'off') {
+      toast.error('Tarama kapalı. Lütfen Tarama Modu\'ndan bir seçenek seçin.');
+      return;
+    }
+    
+    if (scanMode === 'ai_hybrid') {
+      toast.error('AI hibrit modu seçili. API tarama için farklı bir mod seçin.');
       return;
     }
     
@@ -1637,70 +1631,99 @@ export default function Admin() {
               </CardHeader>
             </Card>
 
-            {/* AI Tarama Sistemi */}
+            {/* Akıllı Tarama Mod Sistemi */}
             <Card className="glass">
               <CardHeader>
-                <CardTitle>🤖 AI Tarama Sistemi</CardTitle>
+                <CardTitle>🎯 Tarama Modu</CardTitle>
                 <CardDescription>
-                  AI tarama modunu seçin veya kapatın
+                  AI ve API tarama sistemlerinin nasıl çalışacağını belirleyin
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <RadioGroup value={aiScanMode} onValueChange={(v: any) => setAiScanMode(v)} className="space-y-3">
-                  <div className="flex items-start space-x-2 p-3 rounded-lg border">
-                    <RadioGroupItem value="off" id="ai-off" />
+                <RadioGroup value={scanMode} onValueChange={(v: any) => setScanMode(v)} className="space-y-3">
+                  <div className="flex items-start space-x-2 p-4 rounded-lg border">
+                    <RadioGroupItem value="off" id="scan-off" />
                     <div className="flex-1">
-                      <Label htmlFor="ai-off" className="cursor-pointer font-medium">Kapalı</Label>
-                      <p className="text-xs text-muted-foreground">AI tarama yapmaz</p>
+                      <Label htmlFor="scan-off" className="cursor-pointer font-semibold">⚪ Tarama Kapalı</Label>
+                      <p className="text-xs text-muted-foreground mt-1">Hiçbir tarama yapılmaz (AI ve API kapalı)</p>
                     </div>
                   </div>
-                  <div className="flex items-start space-x-2 p-3 rounded-lg border">
-                    <RadioGroupItem value="lovable" id="ai-lovable" />
+
+                  <div className="flex items-start space-x-2 p-4 rounded-lg border border-green-500/50 bg-green-500/5">
+                    <RadioGroupItem value="ai_hybrid" id="scan-ai-hybrid" />
                     <div className="flex-1">
-                      <Label htmlFor="ai-lovable" className="cursor-pointer font-medium">Sadece Lovable AI</Label>
-                      <p className="text-xs text-muted-foreground">Ücretsiz, aylık limit var</p>
+                      <Label htmlFor="scan-ai-hybrid" className="cursor-pointer font-semibold text-green-300">🟢 AI Tarama (ÖNERİLEN) ⭐</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Lovable AI önce çalışır → Limit aşılırsa OpenAI devreye girer<br/>
+                        <span className="text-green-400/80">• En ekonomik seçenek</span><br/>
+                        <span className="text-green-400/80">• Otomatik fallback ile kesintisiz tarama</span>
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-start space-x-2 p-3 rounded-lg border">
-                    <RadioGroupItem value="openai" id="ai-openai" />
+
+                  <div className="flex items-start space-x-2 p-4 rounded-lg border">
+                    <RadioGroupItem value="api_only" id="scan-api-only" />
                     <div className="flex-1">
-                      <Label htmlFor="ai-openai" className="cursor-pointer font-medium">Sadece OpenAI</Label>
-                      <p className="text-xs text-muted-foreground">Ücretli, sınırsız tarama</p>
+                      <Label htmlFor="scan-api-only" className="cursor-pointer font-semibold">🔵 Sadece API Tarama</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Wikidata, Wikipedia, OSM'den veri topla (AI kullanmaz)<br/>
+                        <span className="text-blue-400/80">• AI kredisi kullanmaz</span><br/>
+                        <span className="text-blue-400/80">• Sadece kayıtlı verilerden toplama</span>
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-start space-x-2 p-3 rounded-lg border border-primary/50 bg-primary/5">
-                    <RadioGroupItem value="both" id="ai-both" />
+
+                  <div className="flex items-start space-x-2 p-4 rounded-lg border">
+                    <RadioGroupItem value="ai_api_both" id="scan-max" />
                     <div className="flex-1">
-                      <Label htmlFor="ai-both" className="cursor-pointer font-medium">Hibrit (ÖNERİLEN) ⭐</Label>
-                      <p className="text-xs text-muted-foreground">Lovable AI önce çalışır, limit aşılırsa OpenAI devreye girer</p>
+                      <Label htmlFor="scan-max" className="cursor-pointer font-semibold">🟣 Maksimum Tarama (AI + API Fallback)</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        AI önce çalışır → AI başarısız olursa API devreye girer<br/>
+                        <span className="text-purple-400/80">• En kapsamlı veri toplama</span><br/>
+                        <span className="text-purple-400/80">• Yedekli sistem, her zaman çalışır</span>
+                      </p>
                     </div>
                   </div>
                 </RadioGroup>
-              </CardContent>
-            </Card>
 
-            {/* API Tarama Sistemi */}
-            <Card className="glass">
-              <CardHeader>
-                <CardTitle>🌐 API Tarama Sistemi</CardTitle>
-                <CardDescription>
-                  DBpedia, Foursquare gibi API'lerden veri toplar
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="api-enabled">API Tarama</Label>
-                  <input 
-                    type="checkbox" 
-                    id="api-enabled" 
-                    checked={apiScanEnabled} 
-                    onChange={(e) => setApiScanEnabled(e.target.checked)}
-                    className="h-4 w-4"
-                  />
+                {/* Sistem Durumu */}
+                <div className="p-4 border rounded-lg bg-muted/50 mt-4">
+                  <p className="font-semibold mb-2">📊 Mevcut Tarama Durumu:</p>
+                  <div className="space-y-1 text-sm">
+                    {scanMode === 'off' && (
+                      <p className="text-red-300">❌ Tarama kapalı - Yeni yer eklenmez</p>
+                    )}
+                    {scanMode === 'ai_hybrid' && (
+                      <>
+                        <p className="text-green-300">✓ Lovable AI aktif (ücretsiz, aylık limit)</p>
+                        <p className="text-green-300">✓ OpenAI fallback aktif (limit aşımında devreye girer)</p>
+                        <p className="text-muted-foreground">• API tarama kapalı</p>
+                      </>
+                    )}
+                    {scanMode === 'api_only' && (
+                      <>
+                        <p className="text-blue-300">✓ API tarama aktif (Wikidata, Wikipedia, OSM)</p>
+                        <p className="text-muted-foreground">• AI tarama kapalı</p>
+                      </>
+                    )}
+                    {scanMode === 'ai_api_both' && (
+                      <>
+                        <p className="text-purple-300">✓ Lovable AI + OpenAI aktif</p>
+                        <p className="text-purple-300">✓ API fallback aktif (AI başarısızsa)</p>
+                        <p className="text-muted-foreground">• Maksimum veri toplama modu</p>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  ℹ️ API tarama için "Gelişmiş API" sekmesinden hangi API'lerin kullanılacağını seçebilirsiniz
-                </p>
+
+                {scanMode === 'off' && (
+                  <div className="p-4 border-2 border-red-500/50 rounded-lg bg-red-500/10">
+                    <p className="text-sm font-bold text-red-300 mb-1">⚠️ UYARI: Tarama Tamamen Kapalı</p>
+                    <p className="text-xs text-muted-foreground">
+                      Yeni yer eklenmesi için en az bir tarama modu aktif olmalı. Bir seçenek seçin ve ayarları kaydedin.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1716,7 +1739,7 @@ export default function Admin() {
                 <div className="grid grid-cols-2 gap-4">
                   <Button 
                     onClick={triggerAIScan} 
-                    disabled={loading || scanningPaused || aiScanMode === 'off'}
+                    disabled={loading || scanningPaused || scanMode === 'off' || scanMode === 'api_only'}
                     className="w-full"
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
@@ -1724,7 +1747,7 @@ export default function Admin() {
                   </Button>
                   <Button 
                     onClick={triggerAPIScan} 
-                    disabled={loading || scanningPaused || !apiScanEnabled}
+                    disabled={loading || scanningPaused || scanMode === 'off' || scanMode === 'ai_hybrid'}
                     variant="outline"
                     className="w-full"
                   >
@@ -1733,12 +1756,16 @@ export default function Admin() {
                   </Button>
                 </div>
                 <div className="text-xs space-y-1 text-muted-foreground">
-                  <p>• AI Sistemi: <strong>{aiScanMode === 'off' ? 'Kapalı' : aiScanMode === 'lovable' ? 'Lovable' : aiScanMode === 'openai' ? 'OpenAI' : 'Hibrit'}</strong></p>
-                  <p>• API Sistemi: <strong>{apiScanEnabled ? 'Aktif' : 'Pasif'}</strong></p>
+                  <p>• Tarama Modu: <strong>
+                    {scanMode === 'off' ? 'Kapalı' : 
+                     scanMode === 'ai_hybrid' ? 'AI Hibrit' : 
+                     scanMode === 'api_only' ? 'Sadece API' : 
+                     'AI+API Maksimum'}
+                  </strong></p>
                 </div>
                 <Button onClick={saveSettings} disabled={loading} className="w-full" variant="secondary">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Settings className="w-4 h-4 mr-2" />}
-                  Ayarları Kaydet
+                  Tarama Ayarlarını Kaydet
                 </Button>
               </CardContent>
             </Card>
