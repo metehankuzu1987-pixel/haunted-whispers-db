@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { HeroMediaUpload } from '@/components/HeroMediaUpload';
+
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, Eye, Play, Settings, Database, Users, Zap, Shield, ExternalLink, Clock, Home, LogIn, AlertTriangle, RefreshCw, XCircle, BarChart3, MessageSquare } from 'lucide-react';
 import type { Place, Comment } from '@/types';
@@ -110,9 +110,6 @@ export default function Admin() {
       fetchAIHealthStatus();
       fetchScanStatus();
       fetchCategories();
-      fetchOpenAILimits();
-      fetchOpenAIUsage();
-      fetchAIHealthStatus();
     }
   }, [isAdmin]);
 
@@ -382,7 +379,7 @@ export default function Admin() {
       const { data } = await supabase
         .from('app_settings')
         .select('setting_key, setting_value')
-        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key', 'ai_model', 'ai_provider_scan', 'ai_provider_translate', 'ai_notifications_enabled']);
+        .in('setting_key', ['google_places_api_key', 'foursquare_api_key', 'geonames_username', 'openai_api_key', 'ai_model', 'ai_provider_translate', 'ai_notifications_enabled']);
       
       if (data) {
         const keys: any = { google_places: '', foursquare: '', geonames_username: '', openai: '' };
@@ -390,7 +387,10 @@ export default function Admin() {
           if (item.setting_key === 'google_places_api_key') keys.google_places = item.setting_value || '';
           if (item.setting_key === 'foursquare_api_key') keys.foursquare = item.setting_value || '';
           if (item.setting_key === 'geonames_username') keys.geonames_username = item.setting_value || '';
-          if (item.setting_key === 'openai_api_key') keys.openai = item.setting_value || '';
+          if (item.setting_key === 'openai_api_key') {
+            const key = item.setting_value || '';
+            keys.openai = key.length > 11 ? `${key.substring(0, 7)}...${key.substring(key.length - 4)}` : key;
+          }
           if (item.setting_key === 'ai_model') setSelectedAiModel(item.setting_value || 'gpt-4o-mini');
           if (item.setting_key === 'ai_provider_translate') setAiProviderTranslate(item.setting_value as any || 'lovable');
           if (item.setting_key === 'ai_notifications_enabled') setAiNotificationsEnabled(item.setting_value === 'true');
@@ -963,27 +963,32 @@ export default function Admin() {
       if (!allPlaces) return;
       
       const potentialDups: any[] = [];
+      const batchSize = 10;
       
-      for (const place of allPlaces) {
-        if (!place.lat || !place.lon) continue;
+      for (let i = 0; i < allPlaces.length; i += batchSize) {
+        const batch = allPlaces.slice(i, i + batchSize);
         
-        const { data: similar } = await supabase
-          .rpc('find_similar_places', {
-            p_name: place.name,
-            p_lat: place.lat,
-            p_lon: place.lon,
-            p_similarity_threshold: 0.7
-          });
-        
-        if (similar && similar.length > 1) {
-          const otherSimilar = similar.filter(s => s.place_id !== place.id);
-          if (otherSimilar.length > 0) {
-            potentialDups.push({
-              mainPlace: place,
-              similarPlaces: otherSimilar
+        await Promise.all(batch.map(async (place) => {
+          if (!place.lat || !place.lon) return;
+          
+          const { data: similar } = await supabase
+            .rpc('find_similar_places', {
+              p_name: place.name,
+              p_lat: place.lat,
+              p_lon: place.lon,
+              p_similarity_threshold: 0.7
             });
+          
+          if (similar && similar.length > 1) {
+            const otherSimilar = similar.filter(s => s.place_id !== place.id);
+            if (otherSimilar.length > 0) {
+              potentialDups.push({
+                mainPlace: place,
+                similarPlaces: otherSimilar
+              });
+            }
           }
-        }
+        }));
       }
       
       setDuplicates(potentialDups);
@@ -2427,8 +2432,6 @@ export default function Admin() {
 
           <TabsContent value="settings">
             <div className="space-y-6">
-              {/* Hero Media Upload */}
-              <HeroMediaUpload />
 
               {/* Category Management */}
               <Card className="glass">

@@ -189,7 +189,10 @@ serve(async (req) => {
       settingsData?.map(s => [s.setting_key, s.setting_value]) || []
     );
 
-    const aiScanMode = settings.ai_scan_mode || 'both';
+    const rawAiScanMode = settings.ai_scan_mode || 'both';
+    const aiScanMode = ['off', 'lovable', 'openai', 'both'].includes(rawAiScanMode) 
+      ? rawAiScanMode as 'off' | 'lovable' | 'openai' | 'both'
+      : 'both';
     const openaiKey = settings.openai_api_key || '';
     const aiModel = settings.ai_model || 'gpt-4o-mini';
     

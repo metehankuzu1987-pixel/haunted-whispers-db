@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 const CACHE_KEY = 'translationCache_v1';
-const TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (for localStorage cache only)
+const TTL_MS = 1 * 24 * 60 * 60 * 1000; // 1 day (for localStorage cache only)
 
 type CacheMap = Record<string, { translation: string; timestamp: number }>;
 

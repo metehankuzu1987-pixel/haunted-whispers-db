@@ -214,28 +214,65 @@ serve(async (req) => {
 
     try {
       if (provider === 'openai' && openaiKey) {
+        await checkOpenAITranslateLimits(supabase);
+        
         notification = '🌐 OpenAI ile çevriliyor...';
         console.log(notification);
         translations = await translateWithOpenAI(texts, openaiKey, aiModel, sourceLang, targetLang);
+        
+        await supabase.from('openai_usage_logs').insert({
+          function_name: 'translate',
+          tokens_used: translations.join('').length,
+          cost_usd: 0.001,
+          success: true
+        });
+        
+        await updateTranslateAIHealth(supabase, 'openai', true);
         notification = `✅ Çeviri tamamlandı (OpenAI)`;
       } else {
         notification = '🌐 Lovable AI ile çevriliyor...';
         console.log(notification);
         translations = await translateWithLovableAI(texts, lovableApiKey, sourceLang, targetLang);
+        
+        await updateTranslateAIHealth(supabase, 'lovable', true);
         notification = `✅ Çeviri tamamlandı (Ücretsiz)`;
       }
     } catch (error: any) {
       console.error("Translation error:", error);
       
+      await updateTranslateAIHealth(supabase, provider === 'openai' ? 'openai' : 'lovable', false, error.status);
+      
       if (error.status === 429 && openaiKey) {
+        await checkOpenAITranslateLimits(supabase);
+        
         notification = '⚠️ Lovable AI limiti aşıldı, OpenAI\'a geçiliyor...';
         console.log(notification);
         translations = await translateWithOpenAI(texts, openaiKey, aiModel, sourceLang, targetLang);
+        
+        await supabase.from('openai_usage_logs').insert({
+          function_name: 'translate',
+          tokens_used: translations.join('').length,
+          cost_usd: 0.001,
+          success: true
+        });
+        
+        await updateTranslateAIHealth(supabase, 'openai', true);
         notification = `✅ Çeviri tamamlandı (OpenAI - Fallback)`;
       } else if (error.status === 402 && openaiKey) {
+        await checkOpenAITranslateLimits(supabase);
+        
         notification = '💳 Lovable AI kredisi bitti, OpenAI\'a geçiliyor...';
         console.log(notification);
         translations = await translateWithOpenAI(texts, openaiKey, aiModel, sourceLang, targetLang);
+        
+        await supabase.from('openai_usage_logs').insert({
+          function_name: 'translate',
+          tokens_used: translations.join('').length,
+          cost_usd: 0.001,
+          success: true
+        });
+        
+        await updateTranslateAIHealth(supabase, 'openai', true);
         notification = `✅ Çeviri tamamlandı (OpenAI - Fallback)`;
       } else if (error.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
