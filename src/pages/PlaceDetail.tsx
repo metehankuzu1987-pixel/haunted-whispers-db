@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { SEOHead } from '@/components/SEOHead';
 import { Place, Comment } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation, Language } from '@/lib/i18n';
@@ -335,11 +336,47 @@ const PlaceDetail = () => {
     return 'badge-score-low';
   };
 
-  return (
-    <div className="min-h-screen">
-      <Header lang={lang} onLangChange={setLang} onRefresh={fetchData} />
+  const placeStructuredData = place ? {
+    '@context': 'https://schema.org',
+    '@type': 'Place',
+    name: displayedName,
+    description: displayedDescription,
+    geo: place.lat && place.lon ? {
+      '@type': 'GeoCoordinates',
+      latitude: place.lat,
+      longitude: place.lon
+    } : undefined,
+    address: {
+      '@type': 'PostalAddress',
+      addressCountry: place.country_code,
+      addressLocality: place.city || undefined
+    },
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: place.evidence_score / 20,
+      bestRating: 5,
+      worstRating: 0,
+      ratingCount: place.votes_up + place.votes_down
+    }
+  } : undefined;
 
-      <main className="container mx-auto px-4 py-6 max-w-4xl">
+  const seoDescription = displayedDescription?.substring(0, 160) || 'Tabirly - Dünyanın lanetli ve perili yerlerini keşfedin';
+
+  return (
+    <>
+      {place && (
+        <SEOHead
+          title={`${displayedName} - Tabirly`}
+          description={seoDescription}
+          canonical={`https://tabirly.com/place/${place.id}`}
+          keywords={`${displayedName}, ${displayedCategory}, ${place.country_code}, ${place.city || ''}, perili yerler, paranormal`}
+          structuredData={placeStructuredData}
+        />
+      )}
+      <div className="min-h-screen">
+        <Header lang={lang} onLangChange={setLang} onRefresh={fetchData} />
+
+        <main className="container mx-auto px-4 py-6 max-w-4xl" role="main">
         <div className="glass rounded-xl p-6 space-y-6">
           {/* Başlık */}
           <div>
@@ -682,7 +719,8 @@ const PlaceDetail = () => {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 };
 

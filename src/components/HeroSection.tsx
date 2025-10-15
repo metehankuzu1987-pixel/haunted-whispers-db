@@ -77,7 +77,7 @@ export const HeroSection = ({ lang = 'tr' }: HeroSectionProps) => {
   }
 
   return (
-    <section className="relative w-full min-h-[60vh] overflow-hidden">
+    <header className="relative w-full min-h-[60vh] overflow-hidden" role="banner">
       {/* Background Media */}
       <div className="absolute inset-0 z-0">
         {settings.hero_media_type === 'video' ? (
@@ -87,20 +87,22 @@ export const HeroSection = ({ lang = 'tr' }: HeroSectionProps) => {
             muted
             playsInline
             className="w-full h-full object-cover"
+            aria-label="Background video showing haunted locations"
           >
             <source src={settings.hero_media_url} type="video/mp4" />
           </video>
         ) : (
           <img
             src={settings.hero_media_url}
-            alt="Hero background"
+            alt={`${displayedTitle} - Perili ve gizemli yerler koleksiyonu görseli`}
             className="w-full h-full object-cover"
+            loading="eager"
           />
         )}
       </div>
 
       {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background z-10" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background z-10" aria-hidden="true" />
 
       {/* Content */}
       <div className="relative z-20 container mx-auto px-4 h-full min-h-[60vh] flex flex-col items-center justify-center text-center">
@@ -111,6 +113,6 @@ export const HeroSection = ({ lang = 'tr' }: HeroSectionProps) => {
           {displayedSubtitle}
         </p>
       </div>
-    </section>
+    </header>
   );
 };

@@ -52,15 +52,17 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-50 via-pink-50 to-blue-50 shadow-md border-b-4 border-purple-200/50">
+    <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-50 via-pink-50 to-blue-50 shadow-md border-b-4 border-purple-200/50" role="banner">
       <div className="container mx-auto px-4 py-4 md:py-5">
-        <div className="flex items-center justify-between gap-4">
+        <nav className="flex items-center justify-between gap-4" role="navigation" aria-label="Main navigation">
           {/* Logo & Başlık */}
           <div className="flex items-center gap-4 md:gap-6 cursor-pointer hover:opacity-90 transition-opacity" onClick={handleLogoSecret}>
             <img 
               src={tabirlyLogo} 
-              alt="Tabirly Logo" 
+              alt="Tabirly - Perili Yerler Databank logosu" 
               className="w-20 h-20 md:w-28 md:h-28 drop-shadow-lg hover:scale-105 transition-transform" 
+              width="112"
+              height="112"
             />
             <div className="block">
               <h1 className="text-lg md:text-2xl font-bold text-gray-900 leading-tight tracking-tight">
@@ -79,6 +81,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
               size="icon"
               onClick={() => navigate('/')}
               className="text-gray-700 hover:bg-purple-50 rounded-lg transition-colors"
+              aria-label="Ana Sayfa"
             >
               <Home className="w-5 h-5" />
             </Button>
@@ -89,6 +92,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 size="icon"
                 onClick={() => navigate(-1)}
                 className="text-gray-700 hover:bg-purple-50 rounded-lg transition-colors"
+                aria-label="Geri dön"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
@@ -100,6 +104,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
                 size="icon"
                 onClick={onRefresh}
                 className="text-gray-700 hover:bg-purple-50 rounded-lg transition-colors"
+                aria-label="Yenile"
               >
                 <RotateCw className="w-5 h-5" />
               </Button>
@@ -128,7 +133,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             {/* Dil Seçici */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg transition-colors">
+                <Button variant="outline" size="icon" className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg transition-colors" aria-label="Dil seçimi">
                   <Globe className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -170,7 +175,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
+        </nav>
       </div>
     </header>
   );

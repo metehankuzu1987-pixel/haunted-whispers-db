@@ -3,6 +3,7 @@ import { Header } from '@/components/Header';
 import { HeroSection } from '@/components/HeroSection';
 import { Filters, FilterState } from '@/components/Filters';
 import { PlaceCard } from '@/components/PlaceCard';
+import { SEOHead } from '@/components/SEOHead';
 import { Place } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation, Language } from '@/lib/i18n';
@@ -130,11 +131,40 @@ const Index = () => {
     trackPageView('/');
   }, []);
 
+  const seoDescription = lang === 'tr' 
+    ? 'Dünyanın lanetli ve perili yerlerini keşfedin. Tabirly ile gizemli hikayeler, terk edilmiş mekanlar ve paranormal aktiviteler hakkında bilgi edinin.'
+    : 'Discover haunted and cursed places around the world. Explore mysterious stories, abandoned locations, and paranormal activities with Tabirly.';
+
+  const seoTitle = lang === 'tr'
+    ? 'Tabirly - Perili Yerler Databank\'ı'
+    : 'Tabirly - Haunted Places Database';
+
   return (
-    <div className="min-h-screen">
-      <Header lang={lang} onLangChange={setLang} onRefresh={fetchPlaces} />
-      
-      <HeroSection lang={lang} />
+    <>
+      <SEOHead
+        title={seoTitle}
+        description={seoDescription}
+        keywords={lang === 'tr' 
+          ? 'perili yerler, lanetli mekanlar, paranormal aktiviteler, gizemli yerler, hayalet şehirler, terk edilmiş binalar, UFO görülmesi, mezarlık, efsanevi yerler'
+          : 'haunted places, cursed locations, paranormal activities, mysterious places, ghost towns, abandoned buildings, UFO sightings, cemeteries, legendary places'
+        }
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: seoTitle,
+          description: seoDescription,
+          url: 'https://tabirly.com/',
+          numberOfItems: places.length,
+          about: {
+            '@type': 'Thing',
+            name: lang === 'tr' ? 'Paranormal Yerler' : 'Paranormal Places'
+          }
+        }}
+      />
+      <div className="min-h-screen">
+        <Header lang={lang} onLangChange={setLang} onRefresh={fetchPlaces} />
+        
+        <HeroSection lang={lang} />
 
       {/* Floating Ana Sayfa Button */}
       <button
@@ -144,7 +174,7 @@ const Index = () => {
         Ana Sayfa
       </button>
 
-      <main className="container mx-auto px-4 py-6 max-w-5xl">
+      <main className="container mx-auto px-4 py-6 max-w-5xl" role="main">
         {/* Filtreler */}
         <div className="mb-6">
           <Filters
@@ -186,7 +216,7 @@ const Index = () => {
         </div>
 
         {/* Footer */}
-        <footer className="mt-12 pt-8 border-t border-border/30 text-center text-sm text-muted-foreground">
+        <footer className="mt-12 pt-8 border-t border-border/30 text-center text-sm text-muted-foreground" role="contentinfo">
           <p>
             {t('footer.openData')} • {t('footer.removal')}:{' '}
             <a href="mailto:iletisim@tabirly.com" className="text-primary hover:underline">
@@ -202,7 +232,8 @@ const Index = () => {
           <p className="mt-2">{t('footer.version')} 1.0.0 • Tabirly</p>
         </footer>
       </main>
-    </div>
+      </div>
+    </>
   );
 };
 
