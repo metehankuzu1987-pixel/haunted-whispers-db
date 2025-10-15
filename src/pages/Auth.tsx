@@ -19,11 +19,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { trackPageView } = useAnalytics();
 
-  useEffect(() => {
-    if (user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
+  // Redirect removed - everyone can access auth page now
 
   useEffect(() => {
     trackPageView('/auth');
