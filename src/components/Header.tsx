@@ -113,7 +113,7 @@ export const Header = ({ lang, onLangChange, onRefresh }: HeaderProps) => {
             {/* Tabirly Link */}
             <Button
               variant="outline"
-              onClick={() => window.open('https://tr.tabirly.com/', '_blank')}
+              onClick={() => window.location.href = 'https://tr.tabirly.com/'}
               className="text-gray-700 hover:bg-purple-50 border-purple-200 rounded-lg transition-colors"
             >
               Tabirly
