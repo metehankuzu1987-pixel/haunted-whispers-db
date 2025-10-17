@@ -1539,7 +1539,9 @@ export default function Admin() {
                       id="description"
                       value={formData.description || ''}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={4}
+                      rows={8}
+                      className="whitespace-pre-wrap"
+                      placeholder="Paragraflar ve boşluklar için Enter tuşunu kullanın..."
                     />
                   </div>
                   
@@ -1561,8 +1563,9 @@ export default function Admin() {
                       id="description_en"
                       value={formData.description_en || ''}
                       onChange={(e) => setFormData({ ...formData, description_en: e.target.value })}
-                      rows={4}
-                      placeholder="English description (optional)"
+                      rows={8}
+                      className="whitespace-pre-wrap"
+                      placeholder="Use Enter for paragraphs and spacing..."
                     />
                   </div>
                   

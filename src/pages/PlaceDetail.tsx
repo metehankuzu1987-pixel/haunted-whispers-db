@@ -552,15 +552,16 @@ const PlaceDetail = () => {
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                   rows={8}
+                  className="whitespace-pre-wrap"
                 />
               ) : (
                 <>
-                  <p className="text-foreground leading-relaxed">
+                  <p className="text-foreground leading-relaxed whitespace-pre-wrap">
                     {showFullDescription
-                      ? place.description
-                      : place.description && place.description.length > 400
-                      ? `${place.description.substring(0, 400)}...`
-                      : place.description}
+                      ? displayedDescription
+                      : displayedDescription && displayedDescription.length > 400
+                      ? `${displayedDescription.substring(0, 400)}...`
+                      : displayedDescription}
                   </p>
                   {displayedDescription && displayedDescription.length > 400 && (
                     <Button

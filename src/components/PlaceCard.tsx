@@ -147,7 +147,7 @@ export const PlaceCard = ({ place, lang }: PlaceCardProps) => {
       </div>
 
       {/* Açıklama */}
-      <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+      <p className="text-sm text-muted-foreground mb-4 leading-relaxed whitespace-pre-wrap">
         {truncateDescription(displayedDescription)}
       </p>
 
