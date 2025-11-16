@@ -3,7 +3,6 @@
 ## Project info
 
 **URL**: https://lovable.dev/projects/c60524be-c5e9-440f-b8d7-a79465a4c216
-https://tr.tabirly.com/
 
 ## How can I edit this code?
 
@@ -12,6 +11,7 @@ There are several ways of editing your application.
 **Use Lovable**
 
 Simply visit the [Lovable Project](https://lovable.dev/projects/c60524be-c5e9-440f-b8d7-a79465a4c216) and start prompting.
+https://tr.tabirly.com/
 
 Changes made via Lovable will be committed automatically to this repo.
 
