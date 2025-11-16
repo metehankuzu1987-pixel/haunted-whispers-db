@@ -3,6 +3,7 @@
 ## Project info
 
 **URL**: https://lovable.dev/projects/c60524be-c5e9-440f-b8d7-a79465a4c216
+https://tr.tabirly.com/
 
 ## How can I edit this code?
 
